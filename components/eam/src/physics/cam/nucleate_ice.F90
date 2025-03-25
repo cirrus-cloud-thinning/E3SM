@@ -33,13 +33,17 @@ use wv_saturation,  only: svp_water, svp_ice
 use cam_logfile,    only: iulog
 use phys_control,   only: cam_chempkg_is 
 
+!lk+
+use K2022, only: get_cirrus
+!lk-
+
 implicit none
 private
 save
 
 integer, parameter :: r8 = selected_real_kind(12)
 
-public :: nucleati_init, nucleati
+public :: nucleati_init, nucleati, nucleati_K2022
 
 logical  :: use_preexisting_ice
 logical  :: use_hetfrz_classnuc
@@ -218,7 +222,6 @@ subroutine nucleati(  &
 
    ni = 0._r8
    tc = tair - 273.15_r8
-
    ! initialize
    niimm = 0._r8
    nidep = 0._r8
@@ -425,6 +428,288 @@ subroutine nucleati(  &
 
 end subroutine nucleati
 
+!===============================================================================
+!lk+
+subroutine nucleati_K2022(  &
+   wbar, tair, pmid, relhum, cldn,      &
+   qc, qi, ni_in, rhoair,               &
+   so4_num, dst_num, soot_num,          &
+   nuci, onihf, oniimm, onidep, onimey, &
+   wpice, weff, fhom,                   &
+   call_frm_zm_in)
+
+   ! Input Arguments
+   real(r8), intent(in) :: wbar        ! grid cell mean vertical velocity (m/s)
+   real(r8), intent(in) :: tair        ! temperature (K)
+   real(r8), intent(in) :: pmid        ! pressure at layer midpoints (pa)
+   real(r8), intent(in) :: relhum      ! relative humidity with respective to liquid
+   real(r8), intent(in) :: cldn        ! new value of cloud fraction    (fraction)
+   real(r8), intent(in) :: qc          ! liquid water mixing ratio (kg/kg)
+   real(r8), intent(in) :: qi          ! grid-mean preexisting cloud ice mass mixing ratio (kg/kg)
+   real(r8), intent(in) :: ni_in       ! grid-mean preexisting cloud ice number conc (#/kg) 
+   real(r8), intent(in) :: rhoair      ! air density (kg/m3)
+   real(r8), intent(in) :: so4_num     ! so4 aerosol number (#/cm^3)
+   real(r8), intent(in) :: dst_num     ! total dust aerosol number (#/cm^3)
+   real(r8), intent(in) :: soot_num    ! soot (hydrophilic) aerosol number (#/cm^3)
+
+   ! Output Arguments
+   real(r8), intent(out) :: nuci       ! ice number nucleated (#/kg)
+   real(r8), intent(out) :: onihf      ! nucleated number from homogeneous freezing of so4
+   real(r8), intent(out) :: oniimm     ! nucleated number from immersion freezing
+   real(r8), intent(out) :: onidep     ! nucleated number from deposition nucleation
+   real(r8), intent(out) :: onimey     ! nucleated number from deposition nucleation  (meyers: mixed phase)
+   real(r8), intent(out) :: wpice      ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at Shom
+   real(r8), intent(out) :: weff       ! effective Vertical velocity for ice nucleation (m/s); weff=wbar-wpice
+   real(r8), intent(out) :: fhom       ! how much fraction of cloud can reach Shom
+
+   ! Optional Arguments
+   logical,  intent(in), optional :: call_frm_zm_in ! true if called from ZM convection scheme
+
+   ! Local workspace
+   real(r8) :: nihf                      ! nucleated number from homogeneous freezing of so4
+   real(r8) :: niimm                     ! nucleated number from immersion freezing
+   real(r8) :: nidep                     ! nucleated number from deposition nucleation
+   real(r8) :: nimey                     ! nucleated number from deposition nucleation (meyers)
+   real(r8) :: n1, ni                    ! nucleated number
+   real(r8) :: tc, A, B                  ! work variable
+   real(r8) :: esl, esi, deles           ! work variable
+   real(r8) :: wbar1, wbar2
+
+   ! used in SUBROUTINE Vpreice
+   real(r8) :: Ni_preice        ! cloud ice number conc (1/m3)   
+   real(r8) :: lami,Ri_preice   ! mean cloud ice radius (m)
+   real(r8) :: Shom             ! initial ice saturation ratio; if <1, use hom threshold Si
+   real(r8) :: detaT,RHimean    ! temperature standard deviation, mean cloudy RHi
+   real(r8) :: wpicehet   ! diagnosed Vertical velocity Reduction caused by preexisting ice (m/s), at shet
+
+   real(r8) :: weffhet    ! effective Vertical velocity for ice nucleation (m/s)  weff=wbar-wpicehet 
+
+   logical  :: call_frm_zm
+!lk+  K2022
+!**** Bernd Kärcher, DLR-IPA
+!C**** A parameterization of cirrus cloud formation: Revisiting competing ice nucleation
+!C**** J. Geophys. Res. (Atmos.) 127, https://doi.org/10.1029/2022JD036907 (2022).
+!C
+!CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+!C  THE USE OF THIS MODULE IMPLIES THAT USERS AGREE NOT TO DISTRIBUTE THE MODULE OR ANY PORTION  C
+!C  OF IT AND NOT TO CHANGE THE NAME OF THE MODULE, "get_cirrus".  USERS MAY MODIFY THIS MODULE  C
+!C  AS NEEDED OR INCORPORATE IT INTO A (LARGER) MODEL.  ANY SPECIAL REQUESTS WITH REGARD TO THE  C
+!C  ORIGINAL MODULE MAY BE DIRECTED TO bernd.kaercher@dlr.de                        Aug 25 2023  C
+!CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+!C
+!c** units cgs-mb-K (output ice concentrations in #/L-air)
+!c
+!c** set loop=0 for single point evaluation, else for multiple evaluations in a loop
+!c** set xnci=0 to prevent pre-existing cirrus ice
+!c** set jinp=0 and xnci=0 for pure homogeneous freezing
+!c
+!c** INP types/ice activity representations:
+!c
+!c** inp_type = 1-10  (with analytical solutions)
+!c**  1:  Heavyside step
+!c**  2:  linear ramp
+!c
+!c** inp_type = 12-20 (requiring numerical integration)
+!c**  12: hyperbolic tangent
+!c
+!      parameter (loop=0)
+!c
+      INTEGER, PARAMETER :: inpmx=3
+      INTEGER, PARAMETER :: iin=7+3*inpmx, ipar=5, iout=6+inpmx
+      !parameter (inpmx=3)
+      integer inp_type(inpmx)
+      real xinp_tot(inpmx),xinp_alpha(inpmx)
+!c
+!c** i/o-arrays communicating with the parameterization
+!c
+!      parameter (iin=7+3*inpmx, ipar=5, iout=6+inpmx)
+      real zin(iin),zpar(ipar),zout(iout)
+      real(r8) :: temp,press,wup,xnci,rci,alphaci,wdown,ssimx,frachomtmp,xnhom,xnhet,xnhom0,xntot
+      integer  :: jinp,k,i
+!c
+!c** print allows screen output from the parameterization for single point evaluation
+!c
+      logical print!,type
+!c
+!c** parameters to evaluate INP spectra
+!c
+!      data sstar          /0.35/               ! step function
+!      data sm,sp          /0.22,0.3/           ! linear ramp
+!      data smid,ds        /0.4,0.02/           ! hyperbolic tangent
+       real(r8):: sstar
+       real(r8):: sm,sp 
+       real(r8):: smid,ds
+
+       sstar=0.35
+       sm=0.22
+       sp=0.3
+       smid=0.4
+       ds=0.02
+!lk-
+   !-------------------------------------------------------------------------------
+
+   RHimean = relhum*svp_water(tair)/svp_ice(tair)*subgrid
+
+   ! temp variables that depend on use_preexisting_ice
+   wbar1 = wbar
+   wbar2 = wbar
+
+   ! If not using prexisting ice, the homogeneous freezing happens in the
+   ! entire gridbox.
+   fhom = 1._r8
+
+   if (present(call_frm_zm_in)) then
+     call_frm_zm = call_frm_zm_in
+   else
+     call_frm_zm = .false.
+   end if
+
+   if (use_preexisting_ice .and. (.not. call_frm_zm)) then
+
+      Ni_preice = ni_in*rhoair                    ! (convert from #/kg -> #/m3)
+      Ni_preice = Ni_preice / max(mincld,cldn)   ! in-cloud ice number density 
+
+      if (Ni_preice > 10.0_r8 .and. qi > 1.e-10_r8) then    ! > 0.01/L = 10/m3   
+         Shom = -1.5_r8   ! if Shom<1 , Shom will be recalculated in SUBROUTINE Vpreice, according to Ren & McKenzie, 2005
+         lami = (gamma4*ci*ni_in/qi)**(1._r8/3._r8)
+         Ri_preice = 0.5_r8/lami                  ! radius
+         Ri_preice = max(Ri_preice, 1e-8_r8)       ! >0.01micron
+         call Vpreice(pmid, tair, Ri_preice, Ni_preice, Shom, wpice)
+         call Vpreice(pmid, tair, Ri_preice, Ni_preice, Shet, wpicehet)
+      else
+         wpice    = 0.0_r8
+         wpicehet = 0.0_r8
+      endif
+
+      weff     = max(wbar-wpice, minweff)
+      wpice    = min(wpice, wbar)
+      weffhet  = max(wbar-wpicehet,minweff)
+      wpicehet = min(wpicehet, wbar)
+
+      wbar1 = weff
+      wbar2 = weffhet
+
+      detaT   = wbar/0.23_r8
+!      if (use_incloud_nuc) then
+!        call frachom(tair, 1._r8, detaT, fhom)
+!      else
+      call frachom(tair, RHimean, detaT, fhom)
+!      end if 
+!AH
+   end if
+
+   ni = 0._r8
+   tc = tair - 273.15_r8
+
+   ! initialize
+   niimm = 0._r8
+   nidep = 0._r8
+   nihf  = 0._r8
+   deles = 0._r8
+   esi   = 0._r8
+
+!lk+   K2022
+      temp  = tair !  220.          K                   ! air temperature   
+      press = pmid/100.   !250.      pa-> mb                       ! air pressure
+      wup   = wbar*100.   !15.      m/s -> cm/s                        ! updraft speed
+      wup   = max(0.01,wup)   !if (wup.lt.0.01)  pause 'updraft below 0.1 mm/s
+!c
+      xnci    = Ni_preice*1E-6  !0.e-3      m-3  ->cm-3                  ! cirrus total ice crystal number concentration
+      rci     = Ri_preice*1E2   !30.e-4     m->cm                    ! cirrus number-mean ice crystal radius
+      alphaci = 0.1                            ! deposition coefficient for cirrus ice crystals
+!c
+      jinp = 1!2                                 ! total number of INP types
+      inp_type(1)   = 2                        ! INP type                dust
+      xinp_tot(1)   = dst_num!*1E-6 !2.e-3       m-3  -> cm-3             ! total INP number concentration
+      xinp_alpha(1) = 0.1                      ! deposition coefficient for INP-derived ice crystals
+      !xinp_alpha(1) = 0.3                      ! deposition coefficient for INP-derived ice crystals
+!      inp_type(2)   = 12
+!      xinp_tot(2)   = 8.e-3
+!      xinp_alpha(2) = 0.3
+!c
+!c** set in-array
+!c
+
+
+      zin(1) = temp
+      zin(2) = press
+      zin(3) = wup
+      zin(4) = xnci
+      zin(5) = rci
+      zin(6) = alphaci
+      zin(7) = jinp
+      do k = 1, jinp
+        i = 8 + 3*(k-1)
+        zin(i)   = real(inp_type(k))
+        zin(i+1) = xinp_tot(k)
+        zin(i+2) = xinp_alpha(k)
+      enddo
+!c
+!c** store INP parameters
+!c
+      zpar(1) = sp
+      zpar(2) = sm
+      zpar(3) = sstar
+      zpar(4) = ds
+      zpar(5) = smid
+        print = .false.
+
+   if ((so4_num >= 1.0e-10_r8 .or. (soot_num+dst_num) >= 1.0e-10_r8) .and. cldn > 0._r8) then
+      if (RHimean.ge.1.2_r8) then
+        call get_cirrus (zin,zpar,zout,iin,ipar,iout,print)
+
+
+!lk-   K2022
+
+!lk+  K2022
+          wdown   = zout(1)
+          wdown   = wdown * 0.01      ! cm/s  -> m/s
+          ssimx   = zout(2)  +1      ! cesm 1.2     Karcher 0.2
+          frachomtmp = zout(3)
+          frachomtmp = frachomtmp * 0.01    ! % -> 1
+          xnhom   = zout(4)              !cm-3
+          xnhom0  = zout(5)               !cm-3
+          xnhet   = zout(6)               !cm-3
+!          write(66,916) wup,(xntot*1.e3),ssimx,wdown,xnci,
+!     >                (xnhet*1.e3),max(1.e-6,(xnhom*1.e3)),
+!     >                max(1.e-6,(xnhom0*1.e3)),max(1.e-6,frachom)
+!AH
+!  if (xnhom.eq.0._r8.and.xnhet.eq.0._r8) then
+!          write (iulog,'(A,F10.4,A,F10.4,A,F10.4)') 'ALLENHU double zero',xnhom,' ',xnhet,' ',wup,' ',wdown
+!          write (iulog,*) xnhom,xnhet,wup,wdown
+!          write (iulog,*) xnhom,xnhet
+!  end if
+
+!AH
+   xntot  = xnhet + xnhom + xnci
+   nuci=xntot
+   nimey=0._r8
+   nidep=0._r8               ! no deposition
+   niimm=xnhet               ! immersion nucleation of dust
+!   nidep=xnhet
+!   niimm=0._r8
+   nihf=xnhom
+   fhom=frachomtmp
+   wpice=wdown
+   weff=wup-wdown
+      else
+      nuci=0._r8
+      onimey=0._r8
+      onidep=0._r8
+      oniimm=0._r8
+      onihf=0._r8
+      endif
+endif
+
+!lk- K2022   
+   nuci   = nuci*1.e+6_r8/rhoair    ! change unit from #/cm3 to #/kg
+   onimey = nimey*1.e+6_r8/rhoair
+   onidep = nidep*1.e+6_r8/rhoair
+   oniimm = niimm*1.e+6_r8/rhoair
+   onihf  = nihf*1.e+6_r8/rhoair
+end subroutine nucleati_K2022
+
+!lk-
 !===============================================================================
 
 subroutine hetero(T,ww,Ns,Nis,Nid)
