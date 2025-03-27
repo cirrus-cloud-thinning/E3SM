@@ -50,9 +50,20 @@ module gw_drag
 ! PUBLIC: interfaces
 !
   public :: gw_drag_readnl           ! Read namelist
-  public :: gw_register              ! Register pbuf variables
+  public :: gw_register1              ! Register pbuf variables
   public :: gw_init                  ! Initialization
   public :: gw_tend                  ! interface to actual parameterization
+
+!AH lk+
+!++jtb
+  public :: gw_register              !
+  public :: wvar_idx
+  public :: wvar_gw_convect_dp_idx
+  public :: wvar_gw_convect_sh_idx
+  public :: wvar_gw_front_idx
+  public :: wvar_gw_front_igw_idx
+!--jtb
+!AH lk-
 
 !
 ! PRIVATE: Rest of the data and interfaces are private to this module
@@ -114,6 +125,16 @@ module gw_drag
   integer :: ttend_dp_idx = -1
   integer :: frontgf_idx  = -1
   integer :: frontga_idx  = -1
+
+!AH lk+
+!++jtb
+  integer :: wvar_idx = -1
+  integer :: wvar_gw_convect_dp_idx = -1
+  integer :: wvar_gw_convect_sh_idx = -1
+  integer :: wvar_gw_front_idx = -1
+  integer :: wvar_gw_front_igw_idx = -1
+!--jtb
+!AH lk-
 
   ! Prefixes for history field names
   character(len=1), parameter :: cm_pf = " "
@@ -209,14 +230,35 @@ subroutine gw_drag_readnl(nlfile)
 
 end subroutine gw_drag_readnl
 
+!AH lk+
+!++jtb
 !==========================================================================
 
 subroutine gw_register()
+  !-----------------------------------------------------------------------
+  !-----------------------------------------------------------------------
+ use ppgrid,           only: pcols, pver
+ use physics_buffer,   only: pbuf_add_field,dtype_r8
+
+ call pbuf_add_field( 'wvar_gw' , 'global', dtype_r8, (/pcols,pver+1/) , wvar_idx )
+ call pbuf_add_field( 'wvar_cvtdp' , 'global', dtype_r8, (/pcols,pver+1/) , wvar_gw_convect_dp_idx )
+ call pbuf_add_field( 'wvar_cvtsh' , 'global', dtype_r8, (/pcols,pver+1/) , wvar_gw_convect_sh_idx )
+ call pbuf_add_field( 'wvar_front' , 'global', dtype_r8, (/pcols,pver+1/) , wvar_gw_front_idx )
+ call pbuf_add_field( 'wvar_frtigw' , 'global', dtype_r8, (/pcols,pver+1/) , wvar_gw_front_igw_idx )
+
+end subroutine gw_register
+!--jtb
+!AH lk-
+
+
+!==========================================================================
+
+subroutine gw_register1()
   use od_common,  only: oro_drag_register
 
   call oro_drag_register()
 
-end subroutine gw_register
+end subroutine gw_register1
 
 !==========================================================================
 
@@ -716,6 +758,28 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
   real(r8) :: dttdf(state%ncol,pver)
   real(r8) :: dttke(state%ncol,pver)
 
+!AH lk+
+!++jtb (10/27/2015)
+  !   wave induced vertical velocity variances (m+2 s-2)
+  real(r8), allocatable :: wvarx(:,:,:)  ! per gw mode
+  real(r8), allocatable :: wvar(:,:)     ! accumulated
+  real(r8), pointer :: wvar_buf(:,:)
+  real(r8), allocatable :: wvarx_gw_convect_dp(:,:,:)  ! per gw mode
+  real(r8), allocatable :: wvar_gw_convect_dp(:,:)     ! accumulated
+  real(r8), pointer :: wvar_gw_convect_dp_buf(:,:)
+  real(r8), allocatable :: wvarx_gw_convect_sh(:,:,:)  ! per gw mode
+  real(r8), allocatable :: wvar_gw_convect_sh(:,:)     ! accumulated
+  real(r8), pointer :: wvar_gw_convect_sh_buf(:,:)
+  real(r8), allocatable :: wvarx_gw_front(:,:,:)  ! per gw mode
+  real(r8), allocatable :: wvar_gw_front(:,:)     ! accumulated
+  real(r8), pointer :: wvar_gw_front_buf(:,:)
+  real(r8), allocatable :: wvarx_gw_front_igw(:,:,:)  ! per gw mode
+  real(r8), allocatable :: wvar_gw_front_igw(:,:)     ! accumulated
+  real(r8), pointer :: wvar_gw_front_igw_buf(:,:)
+!--jtb
+!AH lk-
+
+
   ! spectrum phase speeds for each column
   real(r8) :: c(state%ncol,-pgwv:pgwv)
 
@@ -793,6 +857,21 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
   rdpm = state1%rpdel(:ncol,:)
   zm = state1%zm(:ncol,:)
 
+!AH lk+
+!++jtb (10/27/2015)
+       allocate( wvar(ncol,pver+1))
+       wvar = 0.
+       allocate( wvar_gw_convect_dp(ncol,pver+1))
+       wvar_gw_convect_dp = 0.
+       allocate( wvar_gw_convect_sh(ncol,pver+1))
+       wvar_gw_convect_sh = 0.
+       allocate( wvar_gw_front(ncol,pver+1))
+       wvar_gw_front = 0.
+       allocate( wvar_gw_front_igw(ncol,pver+1))
+       wvar_gw_front_igw = 0.
+!--jtb
+!AH lk-
+
   lq = .true.
   call physics_ptend_init(ptend, state1%psetcols, "Grav_wave_drag", &
        ls=.true., lu=.true., lv=.true., lq=lq)
@@ -838,6 +917,13 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
         ! Convective gravity waves (Beres scheme)
         !------------------------------------------------------------------
 
+!AH++jtb (10/27/2015)
+       !allocate( wvarx(ncol,-pgwv:pgwv,0:pver))
+!       if (.not. allocated(wvarx_n)) deallocate(wvarx_n)
+       allocate( wvarx_gw_convect_dp(ncol,-pgwv:pgwv,0:pver))
+       wvarx_gw_convect_dp=0.  !lk+ lk-
+!AH--jtb
+
         ! Set up heating
         call pbuf_get_field(pbuf, ttend_dp_idx, ttend_dp)
 
@@ -855,7 +941,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
              state1%lat(:ncol), t,    ti, pmid, pint, dpm,   rdpm, &
              piln, rhoi,       nm,   ni, ubm,  ubi,  xv,    yv,   &
              effgw_beres, c,   kvtt, q,  dse,  tau,  utgw,  vtgw, &
-             ttgw, qtgw,  taucd,     egwdffi,  gwut, dttdf, dttke)
+             ttgw, qtgw,  taucd,     egwdffi,  gwut, dttdf, dttke,wvarx=wvarx_gw_convect_dp) !AH
 
         !  add the diffusion coefficients
         do k = 0, pver
@@ -876,6 +962,12 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
            ptend%s(:ncol,k) = ttgw(:,k)
         end do
 
+!AH++jtb (10/27/2015)
+   !--lk+
+       ! accumulate wave induced w-variances
+       wvar_gw_convect_dp = wvar_gw_convect_dp + sum( wvarx_gw_convect_dp , 2 )
+   !-- lk-
+!AH--jtb
 
         ! C.-C. Chen, momentum & energy conservation
         call momentum_energy_conservation(ncol, tend_level, dt, taucd, &
@@ -898,6 +990,10 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
         !------------------------------------------------------------------
         ! Frontally generated gravity waves
         !------------------------------------------------------------------
+!AH ++jtb (10/27/2015)
+       allocate( wvarx_gw_front(ncol,-pgwv:pgwv,0:pver))
+       wvarx_gw_front=0.  !lk+ lk-
+!AH --jtb
 
         ! Get frontogenesis physics buffer fields set by dynamics.
         call pbuf_get_field(pbuf, frontgf_idx, frontgf)
@@ -918,7 +1014,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
              state1%lat(:ncol), t,    ti, pmid, pint, dpm,   rdpm, &
              piln, rhoi,       nm,   ni, ubm,  ubi,  xv,    yv,   &
              effgw_cm,    c,   kvtt, q,  dse,  tau,  utgw,  vtgw, &
-             ttgw, qtgw,  taucd,     egwdffi,  gwut, dttdf, dttke)
+             ttgw, qtgw,  taucd,     egwdffi,  gwut, dttdf, dttke,wvarx=wvarx_gw_front) !AH
 
         !  add the diffusion coefficients
         do k = 0, pver
@@ -940,6 +1036,14 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
            ptend%s(:ncol,k) = ptend%s(:ncol,k) + ttgw(:,k)
         end do
 
+!AH ++jtb (10/27/2015)
+   !--lk+
+       ! accumulate wave induced w-variances
+       wvar_gw_front = wvar_gw_front + sum( wvarx_gw_front , 2 )
+   !-- lk-
+!AH --jtb
+
+
         ! C.-C. Chen, momentum & energy conservation
         call momentum_energy_conservation(ncol, tend_level, dt, taucd, &
              pint, dpm, u, v, ptend%u, ptend%v, ptend%s, utgw, vtgw, ttgw)
@@ -960,6 +1064,12 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
      !---------------------------------------------------------------------
      ! Orographic stationary gravity waves
      !---------------------------------------------------------------------
+!AH ++jtb (10/27/2015)
+       !allocate( wvarx(ncol,-pgwv:pgwv,0:pver))
+       allocate( wvarx(ncol,-pgwv:pgwv,0:pver))
+       wvarx=0.  !lk+ lk-
+!AH --jtb
+
      ! Determine the orographic wave source
      call gw_oro_src(ncol, &
           u, v, t, sgh(:ncol), pmid, pint, dpm, zm, nm, &
@@ -972,7 +1082,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
           state1%lat(:ncol), t,    ti, pmid, pint, dpm,   rdpm, &
           piln, rhoi,       nm,   ni, ubm,  ubi,  xv,    yv,   &
           effgw_oro,   c,   kvtt, q,  dse,  tau,  utgw,  vtgw, &
-          ttgw, qtgw,  taucd,     egwdffi,  gwut(:,:,0:0), dttdf, dttke)
+          ttgw, qtgw,  taucd,     egwdffi,  gwut(:,:,0:0), dttdf, dttke, wvarx=wvarx) !AH
   endif
   !
   if ( use_od_ls .or. use_od_bl .or. use_od_ss) then
@@ -1046,6 +1156,13 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
            ptend%q(:ncol,k,m) = ptend%q(:ncol,k,m) + qtgw(:,k,m)
         end do
      end do
+
+!AH ++jtb (10/27/2015)
+   !--lk+
+       ! accumulate wave induced w-variances
+       wvar = wvar + sum( wvarx , 2 )
+   !-- lk-
+!AH --jtb
 
      ! Write output fields to history file
      call outfld('UTGWORO', utgw,  ncol, lchnk)

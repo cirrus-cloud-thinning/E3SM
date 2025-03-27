@@ -324,7 +324,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
      lat,           t,    ti,  pmid, pint, dpm,   rdpm, &
      piln, rhoi,    nm,   ni,  ubm,  ubi,  xv,    yv,   &
      effgw,      c, kvtt, q,   dse,  tau,  utgw,  vtgw, &
-     ttgw, qtgw, taucd,   egwdffi,   gwut, dttdf, dttke)
+     ttgw, qtgw, taucd,   egwdffi,   gwut, dttdf, dttke,wvarx) !AH
 
   !-----------------------------------------------------------------------
   ! Solve for the drag profile from the multiple gravity wave drag
@@ -408,6 +408,13 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   real(r8), intent(out) :: dttdf(ncol,pver)
   real(r8), intent(out) :: dttke(ncol,pver)
 
+!AH ++jtb_lk
+  ! Diagnosed vertical velocity varance for waves.
+  real(r8), intent(inout), optional :: &
+       wvarx(ncol,-ngwv:ngwv,pver+1)
+     !  wvarx(ncol,-ngwv:ngwv,pver+1)
+!AH --jtb_lk
+
   !---------------------------Local storage-------------------------------
   ! Column, level, wavenumber, and constituent loop indices.
   integer :: i, k, l, m
@@ -445,6 +452,16 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
 
   ! LU decomposition.
   type(lu_decomp) :: decomp
+
+
+!AH++jtb
+  !--lk+
+  ! Level, wavenumber for gravity wave drag
+  real(r8) :: k_gw, l_gw
+  !--lk-
+  ! Diagnosed vertical displacements for waves.
+  real(r8) :: dispgw(ncol,-ngwv:ngwv,pver+1)
+!AH--jtb
 
   !------------------------------------------------------------------------
 
@@ -600,6 +617,120 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
      end do
 
   end if
+
+!AH++jtb_lk
+!write(iulog,*) 'lyukai from gw_common: PRESENT(wvarx)1',PRESENT(wvarx),kbot_src, ktop,maxval(src_level)-1, ktop
+if ( present(wvarx) ) then
+        !write(iulog,*) 'lyukai from gw_common: PRESENT(wvarx)2,satfac',PRESENT(wvarx),satfac
+        !AH if (present(kwvrdg)) then
+        !#####for ridge schemes
+        do k = maxval(src_level)-1, ktop, -1
+        !do l = -ngwv, ngwv
+        do l = -ngwv, ngwv
+        ubmc(:,l) = ubi(:,k) - c(:,l)
+        !ubmc = ubi(:,k) - c(:,l)
+        where( ubmc(:,l) > 0.)
+        !where( ubmc(:) > 0.)
+           !dispgw(:,l,k) = tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * band%kwv )
+           !dispgw(:,l,k) = tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * kwv )
+           dispgw(:,l,k) = tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw ) !AH
+        end where
+        !-- lk!+
+        !kwvrdg
+!        if (masterproc) write(iulog,*) 'lyukai:wvarx from gw_common1: kwvrdg, band%kwv,band%effkwv )'
+!        if (masterproc) write(iulog,*) 'lyukai:wvarx from gw_common1:',kwvrdg
+!        if (masterproc) write(iulog,*) 'lyukai:wvarx from gw_common1:', band%kwv
+!        if (masterproc) write(iulog,*) 'lyukai:wvarx from gw_common1:', band%effkwv
+        !-- lk-
+
+        end do
+        end do
+        do k = maxval(src_level)-1, ktop, -1
+        !do l = -ngwv, ngwv
+        do l = -ngwv, ngwv
+        ubmc(:,l) = ubi(:,k) - c(:,l)
+        !ubmc = ubi(:,k) - c(:,l)
+        !where( ubmc(:,l) > 0.)
+        !   wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* kwv )**2)
+        where( ubmc(:,l) > 0.)
+        !   wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:)* kwvrdg )**2)
+           wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
+        !-- lk+
+        !   write(iulog,*) 'lyukai:wvarx from gw_common2:wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* kwv )**2)'
+        !   write(iulog,*) 'lyukai:wvarx from gw_common2:',wvarx(:,l,k) , dispgw(:,l,k) , ubmc(:,l), kwv
+        !-- lk-
+        end where
+        end do
+        end do
+        do k = maxval(src_level)-1, ktop, -1
+        !do l = -ngwv, ngwv
+        do l = -ngwv, ngwv
+        where( src_level <= k )
+           wvarx(:,l,k) = 0.
+        endwhere
+        end do
+        end do
+
+        else
+        !###### for oro scheme
+        do k = maxval(src_level)-1, ktop, -1
+        !do l = -ngwv, ngwv
+        do l = -ngwv, ngwv
+        ubmc(:,l) = ubi(:,k) - c(:,l)
+        !ubmc = ubi(:,k) - c(:,l)
+        !where( ubmc(:,l) > 0.)
+        !lk+
+        !AH if (lapply_effgw) then
+!        where( ubmc(:,l) > 0.)
+!           dispgw(:,l,k) = tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw )
+           !dispgw(:,l,k) =  tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * band%kwv )
+!        end where
+!         else
+        where( ubmc(:,l) > 0.)
+           dispgw(:,l,k) =  tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw  * effgw )
+           !dispgw(:,l,k) =  tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * band%kwv  * effgw )
+        end where
+!         end if
+        !lk-
+!           dispgw(:,l,k) = 2._r8*tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * band%kwv )
+           !from Barahona 2014 the mean wave amplitude should multiple by 2 in both cases(saturation or not)
+           !dispgw(:,l,k) = tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * kwvrdg )
+           !dispgw(:,l,k) = tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * kwv )
+
+        !-- lk+
+        !kwvrdg
+        !if (masterproc) write(iulog,*) 'lyukai:wvarx from gw_common1:dispgw(:,l,k) = tau(:,l,k) / (ubmc(:) * rhoi(:,k) * ni(:,k) * band%kwv )'
+        !if (masterproc) write(iulog,*) 'lyukai:wvarx from gw_common1:',dispgw(:,l,k) , tau(:,l,k) , ubmc(:) , rhoi(:,k) , ni(:,k) , band%kwv 
+        !-- lk-
+
+        end do
+        end do
+        do k = maxval(src_level)-1, ktop, -1
+        !do l = -ngwv, ngwv
+        do l = -ngwv, ngwv
+        ubmc(:,l) = ubi(:,k) - c(:,l)
+        !ubmc = ubi(:,k) - c(:,l)
+        !where( ubmc(:,l) > 0.)
+        !   wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* kwv )**2)
+        where( ubmc(:,l) > 0.)
+        !-- lk+
+           wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
+        !   write(iulog,*) 'lyukai:wvarx from gw_common2:wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* kwv )**2)'
+        !   write(iulog,*) 'lyukai:wvarx from gw_common2:',wvarx(:,l,k) , dispgw(:,l,k) , ubmc(:,l), kwv 
+        !-- lk-
+        end where
+        end do
+        end do
+        do k = maxval(src_level)-1, ktop, -1
+        !do l = -ngwv, ngwv
+        do l = -ngwv, ngwv
+        where( src_level <= k )
+           wvarx(:,l,k) = 0.
+        endwhere
+        end do
+        end do
+end if
+!AH--jtb
 
   !------------------------------------------------------------------------
   ! Compute the tendencies from the stress divergence.

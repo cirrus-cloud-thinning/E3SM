@@ -156,7 +156,7 @@ subroutine phys_register
     use radiation,          only: radiation_register
     use co2_cycle,          only: co2_register
     use co2_diagnostics,    only: co2_diags_register
-    use gw_drag,            only: gw_register
+    use gw_drag,            only: gw_register1
     use flux_avg,           only: flux_avg_register
     use iondrag,            only: iondrag_register
     use ionosphere,         only: ionos_register
@@ -177,7 +177,9 @@ subroutine phys_register
     use subcol_utils,       only: is_subcol_on
     use output_aerocom_aie, only: output_aerocom_aie_register, do_aerocom_ind3
     use mo_chm_diags,       only: chm_diags_inti_ac
-
+!++jtb
+    use gw_drag,            only: gw_register
+!--jtb
     !---------------------------Local variables-----------------------------
     !
     integer  :: m        ! loop index
@@ -317,7 +319,7 @@ subroutine phys_register
        call co2_register()
        call co2_diags_register()
 
-       call gw_register()
+       call gw_register1()
 
        ! register data model ozone with pbuf
        if (cam3_ozone_data_on) then
@@ -367,6 +369,11 @@ subroutine phys_register
        if (do_aerocom_ind3) call output_aerocom_aie_register()
     
     end if
+
+!++jtb 
+    ! Register GW variables for other physics
+    call gw_register
+!--jtb 
 
     ! Register diagnostics PBUF
     call diag_register()
