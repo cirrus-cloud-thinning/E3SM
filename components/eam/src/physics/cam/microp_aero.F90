@@ -93,6 +93,14 @@ integer :: aist_idx = -1
 integer :: cldo_idx = -1
 integer :: dgnumwet_idx = -1
 
+!-----------lk+  read wvar_gw
+integer :: wvar_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from orography gravity wave  gw_drag_cam54.F90
+integer :: wvar_gw_convect_dp_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
+integer :: wvar_gw_convect_sh_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
+integer :: wvar_gw_front_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
+integer :: wvar_gw_front_igw_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
+!-----------lk-
+
 ! Bulk aerosols
 character(len=20), allocatable :: aername(:)
 real(r8), allocatable :: num_to_mass_aer(:)
@@ -190,6 +198,15 @@ subroutine microp_aero_init
    call cnst_get_ind('CLDICE', cldice_idx)
    call cnst_get_ind('NUMLIQ', numliq_idx)
    call cnst_get_ind('NUMICE', numice_idx)
+
+!-----------lk+  read wvar_gw
+   ! get indices for fields in the physics buffer
+  wvar_idx      = pbuf_get_index('wvar_gw')
+  wvar_gw_convect_dp_idx      = pbuf_get_index('wvar_cvtdp')
+  wvar_gw_convect_sh_idx      = pbuf_get_index('wvar_cvtsh')
+  wvar_gw_front_idx      = pbuf_get_index('wvar_front')
+  wvar_gw_front_igw_idx      = pbuf_get_index('wvar_frtigw')
+!-----------lk-
 
    select case(trim(eddy_scheme))
    case ('diag_TKE', 'SHOC_SGS')
@@ -322,6 +339,15 @@ subroutine microp_aero_init
 
    call addfld('WSUB',  (/ 'lev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity'                   )
    call addfld('WSUBI', (/ 'lev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity for ice'           )
+!--------------------- lk+
+   call addfld('WSUBG',  (/ 'lev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity with orographic gravity wave'           )
+   call addfld('WSUBIG',  (/ 'lev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity for ice with orographic gravity wave'           )
+   call addfld('WVARBF',  (/ 'ilev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity variance for ice with orographic gravity wave'           )
+   call addfld('WVARDP',  (/ 'ilev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity variance for ice with non-orographic gravity wave dpconv'           )
+   call addfld('WVARSH',  (/ 'ilev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity variance for ice with non-orographic gravity wave shconv'           )
+   call addfld('WVARFR',  (/ 'ilev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity variance for ice with non-orographic gravity wave frontal'           )
+   call addfld('WVARFRI',  (/ 'ilev' /), 'A', 'm/s', 'Diagnostic sub-grid vertical velocity variance for ice with non-orographic gravity wave frontal igw'           )
+!--------------------- lk-
 
    call addfld('WLARGE',(/ 'lev' /), 'A', 'm/s', 'Large-scale vertical velocity'                           )
    call addfld('WSIG',  (/ 'lev' /), 'A', 'm/s', 'Subgrid standard deviation of vertical velocity'         )
@@ -469,6 +495,12 @@ subroutine microp_aero_run ( &
 
    real(r8) :: wsub(pcols,pver)    ! diagnosed sub-grid vertical velocity st. dev. (m/s)
    real(r8) :: wsubi(pcols,pver)   ! diagnosed sub-grid vertical velocity ice (m/s)
+
+!---------------lk+
+   real(r8) :: wsubi_gw(pcols ,pver)   ! diagnosed sub-grid vertical velocity ice (m/s) add orographci graivity wave
+   real(r8) :: wsub_gw(pcols ,pver)   ! diagnosed sub-grid vertical velocity  (m/s) add orographci graivity wave
+!---------------lk-
+
    real(r8) :: wsubice(pcols,pver) ! final updraft velocity for ice nucleation (m/s)
    real(r8) :: wsig(pcols,pver)    ! diagnosed standard deviation of vertical velocity ~ f(TKE)
    real(r8) :: nucboast
@@ -480,6 +512,18 @@ subroutine microp_aero_run ( &
 
    real(r8), allocatable :: factnum(:,:,:) ! activation fraction for aerosol number
    !-------------------------------------------------------------------------------
+!-----------lk+  read wvar_gw
+   real(r8), pointer :: wvar_buf(:,:)    ! buffer w'2 variance
+   real(r8), pointer :: wvar_gw_convect_dp_buf(:,:)    ! buffer w'2 variance
+   real(r8), pointer :: wvar_gw_convect_sh_buf(:,:)    ! buffer w'2 variance
+   real(r8), pointer :: wvar_gw_front_buf(:,:)    ! buffer w'2 variance
+   real(r8), pointer :: wvar_gw_front_igw_buf(:,:)    ! buffer w'2 variance
+   call pbuf_get_field(pbuf,wvar_idx,wvar_buf)
+   call pbuf_get_field(pbuf,wvar_gw_convect_dp_idx,wvar_gw_convect_dp_buf)
+   call pbuf_get_field(pbuf,wvar_gw_convect_sh_idx,wvar_gw_convect_sh_buf)
+   call pbuf_get_field(pbuf,wvar_gw_front_idx,wvar_gw_front_buf)
+   call pbuf_get_field(pbuf,wvar_gw_front_igw_idx,wvar_gw_front_igw_buf)
+!-----------lk-
 
    associate( &
       lchnk => state%lchnk,             &
@@ -612,13 +656,20 @@ subroutine microp_aero_run ( &
    wsub(:ncol,:top_lev-1)  = wsubmin
    wsubi(:ncol,:top_lev-1) = 0.001_r8
    wsig(:ncol,:top_lev-1)  = 0.001_r8
-
+!--------lk+
+   wsubi_gw(:ncol,:top_lev-1) = 0.001_r8
+   wsub_gw(:ncol,:top_lev-1) = 0.001_r8
+!--------lk- 
    do k = top_lev, pver
       do i = 1, ncol
 
          select case (trim(eddy_scheme))
          case ('diag_TKE', 'CLUBB_SGS', 'SHOC_SGS')
             wsub(i,k) = sqrt(0.5_r8*(tke(i,k) + tke(i,k+1))*(2._r8/3._r8))
+!lk+
+            wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+!lk-
+
 !            write(*,*) 'WSUB ', wsub(i,k), tke(i,k)
             wsub(i,k) = min(wsub(i,k),10._r8)
             wsig(i,k) = max(0.001_r8, wsub(i,k))
@@ -641,6 +692,9 @@ subroutine microp_aero_run ( &
             if (.not. use_preexisting_ice) then
                wsubi(i,k) = min(wsubi(i,k), 0.2_r8)
             endif
+            !-------------- lk+
+            wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+            !--------------- lk-
          endif
 
          wsub(i,k)  = max(wsubmin, wsub(i,k))
@@ -694,6 +748,20 @@ subroutine microp_aero_run ( &
    call outfld('WSIG',   wsig, pcols, lchnk)
    call outfld('WLARGE', w0, pcols, lchnk)
    call outfld('WSUBI2', w2, pcols, lchnk)
+!------------  lk+
+   !wsubi_gw(:ncol,:top_lev-1) = 0.001_r8
+   !wvar_buf(:ncol,:top_lev) = 0.001_r8
+   !wsubi_gw(:,:)=0.0
+   !wvar_buf(:,:)=0.0
+   call outfld('WSUBG', wsub_gw, pcols, lchnk)
+   call outfld('WSUBIG', wsubi_gw, pcols, lchnk)
+!   call outfld('WSUING', wsubi_ngw, pcols, lchnk)
+   call outfld('WVARBF', wvar_buf, pcols, lchnk)
+   call outfld('WVARDP', wvar_gw_convect_dp_buf, pcols, lchnk)
+   call outfld('WVARSH', wvar_gw_convect_sh_buf, pcols, lchnk)
+   call outfld('WVARFR', wvar_gw_front_buf, pcols, lchnk)
+   call outfld('WVARFRI', wvar_gw_front_igw_buf, pcols, lchnk)
+!------------ lk-
 
 
 
@@ -703,7 +771,9 @@ subroutine microp_aero_run ( &
    !ICE Nucleation
 
    call t_startf('nucleate_ice_cam_calc')
-   call nucleate_ice_cam_calc(state, wsubice, pbuf)
+!----------- lk+
+   call nucleate_ice_cam_calc(state, wsubi_gw, pbuf)
+!----------- lk-
    call t_stopf('nucleate_ice_cam_calc')
 
    !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -741,13 +811,13 @@ subroutine microp_aero_run ( &
       end do
 
       call outfld('LCLOUD', lcldn, pcols, lchnk)
-
+!lk+
       call t_startf('dropmixnuc')
       call dropmixnuc( &
-         state, ptend, deltatin, pbuf, wsub, &
+         state, ptend, deltatin, pbuf, wsub_gw, &
          lcldn, lcldo, nctend_mixnuc, factnum)
       call t_stopf('dropmixnuc')
-
+!lk-
       npccn(:ncol,:) = nctend_mixnuc(:ncol,:)
 
    else
