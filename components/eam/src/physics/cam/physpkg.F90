@@ -176,7 +176,9 @@ subroutine phys_register
     use subcol_utils,       only: is_subcol_on
     use output_aerocom_aie, only: output_aerocom_aie_register, do_aerocom_ind3
     use mo_chm_diags,       only: chm_diags_inti_ac
-
+!++jtb
+    use gw_drag,            only: gw_register
+!--jtb
     !---------------------------Local variables-----------------------------
     !
     integer  :: m        ! loop index
@@ -364,6 +366,11 @@ subroutine phys_register
        if (do_aerocom_ind3) call output_aerocom_aie_register()
     
     end if
+
+!++jtb 
+    ! Register GW variables for other physics
+    call gw_register
+!--jtb 
 
     ! Register diagnostics PBUF
     call diag_register()
@@ -1432,12 +1439,12 @@ subroutine phys_run2(phys_state, ztodt, phys_tend, pbuf2d,  cam_out, &
        call t_startf('diag_surf')
        call diag_surf(cam_in(c), cam_out(c), phys_state(c)%ps,trefmxav(1,c), trefmnav(1,c))
        call t_stopf('diag_surf')
-
+!       write(iulog,*) 'AllenHu physpkg 3'
        call tphysac(ztodt, cam_in(c),  &
             sgh(1,c), sgh30(1,c), cam_out(c),                              &
             phys_state(c), phys_tend(c), phys_buffer_chunk, phys_diag(c),  &
             fsds(1,c))
-
+!       write(iulog,*) 'AllenHu physpkg 4'
        call system_clock(count=end_chnk_cnt, count_rate=sysclock_rate, count_max=sysclock_max)
        if ( end_chnk_cnt < beg_chnk_cnt ) end_chnk_cnt = end_chnk_cnt + sysclock_max
        chunk_cost = real( (end_chnk_cnt-beg_chnk_cnt), r8)/real(sysclock_rate, r8)
@@ -1922,9 +1929,9 @@ if (l_gw_drag) then
     ! Gravity wave drag
     !===================================================
     call t_startf('gw_tend')
-
+!    write(iulog,*) 'AllenHu physpkg 1'
     call gw_tend(state, sgh, pbuf, ztodt, ptend, cam_in)
-
+!    write(iulog,*) 'AllenHu physpkg 2'
     call physics_update(state, ptend, ztodt, tend)
     ! Check energy integrals
     call check_energy_chng(state, tend, "gwdrag", nstep, ztodt, zero, zero, zero, zero)
