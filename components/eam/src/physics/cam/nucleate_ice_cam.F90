@@ -29,9 +29,9 @@ use shr_spfn_mod,   only: erf => shr_spfn_erf
 #endif
 use cam_logfile,    only: iulog
 use cam_abortutils, only: endrun
-
-use nucleate_ice,   only: nucleati_init, nucleati
-
+!lk+
+use nucleate_ice,   only: nucleati_init, nucleati, nucleati_K2022
+!lk-
 
 implicit none
 private
@@ -849,16 +849,24 @@ subroutine nucleate_ice_cam_calc( &
             soot_num = 0.0_r8
             organic_num = 0.0_r8
 
-            call nucleati( &
+!            call nucleati( &
+!               wsubi(i,k), t(i,k), pmid(i,k), relhum(i,k), icldm(i,k),   &
+!               qc(i,k), qi(i,k), ni(i,k), rho(i,k),                      &
+!               so4_num, dst_num, soot_num,                               &
+!               dst1_sfc_to_num, dst3_sfc_to_num,                         &
+!               naai(i,k), nihf(i,k), niimm(i,k), nidep(i,k), nimey(i,k), &
+!               wice(i,k), weff(i,k), fhom(i,k),                          &
+!               dst1_num,dst2_num,dst3_num,dst4_num,organic_num,          &
+!               clim_modal_aero)
+
+!lk+
+             call nucleati_K2022( &
                wsubi(i,k), t(i,k), pmid(i,k), relhum(i,k), icldm(i,k),   &
                qc(i,k), qi(i,k), ni(i,k), rho(i,k),                      &
-               so4_num, dst_num, soot_num,                               &
-               dst1_sfc_to_num, dst3_sfc_to_num,                         &
+               so4_num, dst3_num, soot_num,                              &
                naai(i,k), nihf(i,k), niimm(i,k), nidep(i,k), nimey(i,k), &
-               wice(i,k), weff(i,k), fhom(i,k),                          &
-               dst1_num,dst2_num,dst3_num,dst4_num,organic_num,          &
-               clim_modal_aero)
-
+               wice(i,k), weff(i,k), fhom(i,k))
+!lk-
 
             naai_hom(i,k) = nihf(i,k)
 
