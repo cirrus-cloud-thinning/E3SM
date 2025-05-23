@@ -489,7 +489,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   ubmc = 0._r8
   ubmc2 = 0._r8
   wrk = 0._r8
-
+  wvarx = 0._r8
   !-- lk+
   dispgw=0._r8
   l_gw=10000.0_r8
@@ -640,8 +640,8 @@ if ( present(wvarx) ) then
            dispgw(:,l,k) = tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw ) !AH
            wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
         end where
-!        where( src_level <= k .or. tau(:,l,k) < 0.0000000000001 .or. ubmc(:,l) <= 0._r8 ) !Necessary limit
-        where( src_level <= k .or. ubmc(:,l) <= 0._r8 )
+        where( src_level <= k .or. tau(:,l,k) < 0.0000000000001 .or. ubmc(:,l) <= 0._r8 ) !Necessary limit
+!        where( src_level <= k .or. ubmc(:,l) <= 0._r8 )
            wvarx(:,l,k) = 0._r8
         endwhere
         end do

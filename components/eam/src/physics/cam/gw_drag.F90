@@ -1008,7 +1008,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
        !wvarx=0.  
        !write(iulog,*) 'AllenHu gw_drag 12'!lk+ lk-
 !AH --jtb
-
+     wvarx = 0._r8
      ! Determine the orographic wave source
      call gw_oro_src(ncol, &
           u, v, t, sgh(:ncol), pmid, pint, dpm, zm, nm, &
@@ -1086,13 +1086,13 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
 !if (allocated(wvarx)) write(iulog,*) 'AllenHu allocated wvarx 2'
 !++jtb (10/28/2015)
    call pbuf_get_field( pbuf, wvar_idx, wvar_buf )
-!   do i = 1, ncol
-!   do k = 0, pver
-!     if (tau(i,1,k) < 0.0000000000001) then
-!       wvar(i,k) = 0._r8
-!     end if
-!   end do
-!   end do
+   do i = 1, ncol
+   do k = 0, pver
+     if (tau(i,1,k) < 0.00000000000001) then
+       wvar(i,k) = 0._r8
+     end if
+   end do
+   end do
    wvar_buf(:ncol,0:pver) = wvar(:ncol,0:pver)
 !   do i = 1, ncol
 !   do k = 0, pver
