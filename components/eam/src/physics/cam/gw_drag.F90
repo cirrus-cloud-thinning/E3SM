@@ -891,7 +891,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
        ! accumulate wave induced w-variances
        !write(iulog,*) 'AllenHu gw_drag 5'
     ! do k = 1,pver
-    wvar_gw_convect_dp = wvar_gw_convect_dp + sum( wvarx_gw_convect_dp , 2 )
+    wvar_gw_convect_dp = sum( wvarx_gw_convect_dp , 2 )
     !   wvar_gw_convect_dp(:,k) = wvar_gw_convect_dp(:,k) + 0.5*sum(wvarx_gw_convect_dp(:,:,k-1)+wvarx_gw_convect_dp(:,:,k),2)
     ! end do
        !write(iulog,*) 'AllenHu gw_drag 6'
@@ -972,7 +972,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
        ! accumulate wave induced w-variances
        !write(iulog,*) 'AllenHu gw_drag 9'
    !  do k = 1,pver
-       wvar_gw_front = wvar_gw_front + sum( wvarx_gw_front , 2 )
+       wvar_gw_front = sum( wvarx_gw_front , 2 )
    !    wvar_gw_front(:,k) = wvar_gw_front(:,k) + 0.5*sum(wvarx_gw_front(:,:,k-1)+wvarx_gw_front(:,:,k),2)
    !  end do
        !write(iulog,*) 'AllenHu gw_drag 10'
@@ -1017,6 +1017,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
      do_latitude_taper = .false.
 
      ! Solve for the drag profile with orographic sources.
+     ! BRH: why is pgwv = 0 for this call?
      call gw_drag_prof(ncol, 0, src_level, tend_level, do_latitude_taper, dt, &
           state1%lat(:ncol), t,    ti, pmid, pint, dpm,   rdpm, &
           piln, rhoi,       nm,   ni, ubm,  ubi,  xv,    yv,   &
@@ -1079,21 +1080,15 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
        ! accumulate wave induced w-variances
    !  do k = 1, pver
    !    wvar(:,k) = wvar(:,k) + 0.5*sum(wvarx(:,:,k-1)+wvarx(:,:,k),2)
-      wvar = wvar + sum( wvarx , 2 )
+      !wvar = wvar + sum( wvarx , 2 )
+      wvar(:,:) = wvarx(:,0,:)
    !  end do
    !-- lk-
 !AH --jtb
-!if (allocated(wvarx)) write(iulog,*) 'AllenHu allocated wvarx 2'
-!++jtb (10/28/2015)
    call pbuf_get_field( pbuf, wvar_idx, wvar_buf )
-   do i = 1, ncol
-   do k = 0, pver
-     if (tau(i,1,k) < 0.00000000000001) then
-       wvar(i,k) = 0._r8
-     end if
-   end do
-   end do
-   wvar_buf(:ncol,0:pver) = wvar(:ncol,0:pver)
+   wvar_buf(:ncol,1:pver+1) = wvar(:ncol,0:pver)
+   ! Check if there this contains reasonable values?
+
 !   do i = 1, ncol
 !   do k = 0, pver
 !     if (wvar_buf(i,k) > 50._r8) then
@@ -1103,11 +1098,11 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
 !   end do
    !-- lk+
    call pbuf_get_field( pbuf, wvar_gw_convect_dp_idx, wvar_gw_convect_dp_buf )
-   wvar_gw_convect_dp_buf(:ncol,0:pver) = wvar_gw_convect_dp(:ncol,0:pver)
+   wvar_gw_convect_dp_buf(:ncol,1:pver+1) = wvar_gw_convect_dp(:ncol,0:pver)
 !   call pbuf_get_field( pbuf, wvar_gw_convect_sh_idx, wvar_gw_convect_sh_buf )
 !   wvar_gw_convect_sh_buf(:ncol,:pver+1) = wvar_gw_convect_sh(:ncol,:pver+1)
    call pbuf_get_field( pbuf, wvar_gw_front_idx, wvar_gw_front_buf )
-   wvar_gw_front_buf(:ncol,0:pver) = wvar_gw_front(:ncol,0:pver)
+   wvar_gw_front_buf(:ncol,1:pver+1) = wvar_gw_front(:ncol,0:pver)
 !   call pbuf_get_field( pbuf, wvar_gw_front_igw_idx, wvar_gw_front_igw_buf )
 !   wvar_gw_front_igw_buf(:ncol,:pver+1) = wvar_gw_front_igw(:ncol,:pver+1)
    !-- lk-

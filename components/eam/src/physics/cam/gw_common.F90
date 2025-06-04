@@ -324,7 +324,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
      lat,           t,    ti,  pmid, pint, dpm,   rdpm, &
      piln, rhoi,    nm,   ni,  ubm,  ubi,  xv,    yv,   &
      effgw,      c, kvtt, q,   dse,  tau,  utgw,  vtgw, &
-     ttgw, qtgw, taucd,   egwdffi,   gwut, dttdf, dttke,wvarx) !AH
+     ttgw, qtgw, taucd,   egwdffi,   gwut, dttdf, dttke, wvarx) !AH
 
   !-----------------------------------------------------------------------
   ! Solve for the drag profile from the multiple gravity wave drag
@@ -408,12 +408,8 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   real(r8), intent(out) :: dttdf(ncol,pver)
   real(r8), intent(out) :: dttke(ncol,pver)
 
-!AH ++jtb_lk
-  ! Diagnosed vertical velocity varance for waves.
-  real(r8), intent(inout), optional :: &
-     !  wvarx(ncol,-ngwv:ngwv,0:pver)
-       wvarx(ncol,-ngwv:ngwv,0:pver)
-!AH --jtb_lk
+  ! Diagnosed vertical velocity variance for gravity waves.
+  real(r8), intent(inout), optional :: wvarx(ncol,-ngwv:ngwv,0:pver)
 
   !---------------------------Local storage-------------------------------
   ! Column, level, wavenumber, and constituent loop indices.
@@ -626,71 +622,51 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
 
   end if
 
-!AH++jtb_lk
-if ( present(wvarx) ) then
-        !AH if (present(kwvrdg)) then
-        !#####for ridge schemes
-        do k = maxval(src_level)-1, ktop, -1
+  if ( present(wvarx) ) then
+     !AH if (present(kwvrdg)) then
+     !#####for ridge schemes
+     do k = maxval(src_level)-1, ktop, -1
         do l = -ngwv, ngwv
-!        write(iulog,*) 'AllenHu l', l
-        ubmc(:,l) = ubi(:,k) - c(:,l)
-        dispgw(:,l,k) = 0._r8
-        where( ubmc(:,l) > 0._r8 .and. src_level > k .and. tau(:,l,k) > 0.0000000000001)
-!        where( ubmc(:,l) > 0._r8 .and. src_level > k)
-           dispgw(:,l,k) = tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw ) !AH
-           wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
-        end where
-        where( src_level <= k .or. tau(:,l,k) < 0.0000000000001 .or. ubmc(:,l) <= 0._r8 ) !Necessary limit
-!        where( src_level <= k .or. ubmc(:,l) <= 0._r8 )
-           wvarx(:,l,k) = 0._r8
-        endwhere
+           ubmc(:,l) = ubi(:,k) - c(:,l)
+           dispgw(:,l,k) = 0._r8
+           where( ubmc(:,l) > 0._r8 .and. src_level > k)
+              dispgw(:,l,k) = tau(:,l,k) / max((ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw ), 1e-15)  ! Make sure we do not divide by zero
+              wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
+           end where
+           ! BRH: check this
+           where( src_level <= k .or. ubmc(:,l) <= 0._r8 )
+              wvarx(:,l,k) = 0._r8
+           endwhere
         end do
-        end do
-!        write(iulog,*) 'AH1'
-
-!        do i = 1, ncol
-!        do l = -ngwv, ngwv
-!        do k = maxval(src_level)-1, ktop, -1
-!        if (dispgw(i,l,k) .eq. 0._r8) then
-!            wvarx(i,l,k) = 0.
-!        end if
-!        if (wvarx(i,l,k) > 50._r8 .and. ubmc(i,l) > 0._r8) then
-!            write(iulog,*) 'AllenHu1 wvarx ',wvarx(i,l,k),' dispgw ',dispgw(i,l,k),' tau ',tau(i,l,k),' ubmc ',ubmc(i,l),' rhoi ',rhoi(i,k),' ni',ni(i,k),' i ',i,' k ',k
-!        end if
-!        end do
-!        end do
-!        end do
-
-        else
-        !###### for oro scheme
-        do k = maxval(src_level)-1, ktop, -1
+     end do
+  else
+     !###### for oro scheme
+     do k = maxval(src_level)-1, ktop, -1
         do l = -ngwv, ngwv
-        ubmc(:,l) = ubi(:,k) - c(:,l)
-        where( ubmc(:,l) > 0. .and. src_level > k)
-           dispgw(:,l,k) =  tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw  * effgw )
-           wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
-        end where
-        where( src_level <= k )
-           wvarx(:,l,k) = 0.
-        endwhere
+           ubmc(:,l) = ubi(:,k) - c(:,l)
+           where( ubmc(:,l) > 0. .and. src_level > k)
+              dispgw(:,l,k) =  tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw  * effgw )
+              wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
+           end where
+           where( src_level <= k )
+              wvarx(:,l,k) = 0.
+           endwhere
         end do
-        end do
+     end do
 
-        do i = 1, ncol
+     do i = 1, ncol
         do l = -ngwv, ngwv
-        do k = maxval(src_level)-1, ktop, -1
-!        if (dispgw(i,l,k) .eq. 0._r8) then
-!           wvarx(i,l,k) = 0.
-!        end if
-
-        if (wvarx(i,0,k) > 50._r8) then
-           write(iulog,*) 'AllenHu2 wvarx ',wvarx(i,l,k),' dispgw ',dispgw(i,l,k),' tau ',tau(i,l,k),' ubmc ',ubmc(i,l),' rhoi ',rhoi(i,k),' ni',ni(i,k),' i ',i,' k ',k
-        end if
-        end do
+           do k = maxval(src_level)-1, ktop, -1
+!             if (dispgw(i,l,k) .eq. 0._r8) then
+!                wvarx(i,l,k) = 0.
+!             end if
+              if (wvarx(i,0,k) > 50._r8) then
+                 write(iulog,*) 'AllenHu2 wvarx ',wvarx(i,l,k),' dispgw ',dispgw(i,l,k),' tau ',tau(i,l,k),' ubmc ',ubmc(i,l),' rhoi ',rhoi(i,k),' ni',ni(i,k),' i ',i,' k ',k
+              end if
+           end do
         end do 
-        end do
-end if
-!AH--jtb
+     end do
+  end if
   !------------------------------------------------------------------------
   ! Compute the tendencies from the stress divergence.
   !------------------------------------------------------------------------

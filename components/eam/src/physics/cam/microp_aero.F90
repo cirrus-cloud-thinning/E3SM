@@ -47,6 +47,7 @@ use cam_history,      only: addfld, add_default, outfld
 use cam_logfile,      only: iulog
 use cam_abortutils,       only: endrun
 use perf_mod,         only: t_startf, t_stopf
+use time_manager,     only : is_first_step
 
 implicit none
 private
@@ -203,6 +204,9 @@ subroutine microp_aero_init
 !  write(iulog,*) 'AllenHu microp 3'
    ! get indices for fields in the physics buffer
   wvar_idx      = pbuf_get_index('wvar_gw')
+  if (wvar_idx < 0) then
+     call endrun('wvar_idx < 0')
+  end if
   wvar_gw_convect_dp_idx      = pbuf_get_index('wvar_cvtdp')
 !  wvar_gw_convect_sh_idx      = pbuf_get_index('wvar_cvtsh')
   wvar_gw_front_idx      = pbuf_get_index('wvar_front')
@@ -645,7 +649,6 @@ subroutine microp_aero_run ( &
       call pbuf_get_field(pbuf, wp2_idx, wp2, start=(/1,1,itim_old/),kount=(/pcols,pverp,1/))
       allocate(tke(pcols,pverp))
       tke(:ncol,:) = (3._r8/2._r8)*wp2(:ncol,:)
-
    case default
       call pbuf_get_field(pbuf, kvh_idx, kvh)
    end select
@@ -659,8 +662,10 @@ subroutine microp_aero_run ( &
    wsubi(:ncol,:top_lev-1) = 0.001_r8
    wsig(:ncol,:top_lev-1)  = 0.001_r8
 !--------lk+
-   wsubi_gw(:ncol,:top_lev-1) = 0.001_r8
-   wsub_gw(:ncol,:top_lev-1) = 0.001_r8
+   wsubi_gw = 0
+   !wsubi_gw(:ncol,:top_lev-1) = 0.001_r8
+   wsub_gw = 0
+   !wsub_gw(:ncol,:top_lev-1) = 0.001_r8
 !--------lk- 
    do k = top_lev, pver
       do i = 1, ncol
@@ -668,11 +673,9 @@ subroutine microp_aero_run ( &
          select case (trim(eddy_scheme))
          case ('diag_TKE', 'CLUBB_SGS', 'SHOC_SGS')
             wsub(i,k) = sqrt(0.5_r8*(tke(i,k) + tke(i,k+1))*(2._r8/3._r8))
-!lk+
-            wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
-!lk-
-
-!            write(*,*) 'WSUB ', wsub(i,k), tke(i,k)
+            if (.not. is_first_step()) then
+              wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+            end if
             wsub(i,k) = min(wsub(i,k),10._r8)
             wsig(i,k) = max(0.001_r8, wsub(i,k))
          case default 
@@ -690,7 +693,9 @@ subroutine microp_aero_run ( &
             wsubi(i,k) = max(0.001_r8, wsub(i,k))
             wsubi(i,k) = min(wsubi(i,k), 10.0_r8)
             !-------------- lk+
-            wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+            if (.not. is_first_step()) then
+              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+            end if
             !--------------- lk-
          else
             wsubi(i,k) = max(0.001_r8, wsub(i,k))
@@ -698,7 +703,9 @@ subroutine microp_aero_run ( &
                wsubi(i,k) = min(wsubi(i,k), 0.2_r8)
             endif
             !-------------- lk+
-            wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+            if (.not. is_first_step()) then
+              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+            end if
             !--------------- lk-
          endif
 !         write(iulog,*) 'AllenHu microp 8'
