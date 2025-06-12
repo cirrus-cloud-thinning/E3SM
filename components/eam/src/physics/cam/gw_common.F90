@@ -409,6 +409,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   real(r8), intent(out) :: dttke(ncol,pver)
 
   ! Diagnosed vertical velocity variance for gravity waves.
+  ! BRH NOTE: this is used throughout this routine as if it is NOT optional; need to fix
   real(r8), intent(inout), optional :: wvarx(ncol,-ngwv:ngwv,0:pver)
 
   !---------------------------Local storage-------------------------------
@@ -454,6 +455,11 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
 !AH++jtb
   !--lk+
   ! Level, wavenumber for gravity wave drag
+  !   k_gw: wavenumber (units?)
+  !   l_gw: wavelength (units?)
+  ! From paper:
+  !   L is considerably shorter than the length scales of OGWs cited in previous descriptions of the McFarlane scheme in CAM6,
+  !   however, in practice this is poorly constrained quantity and we regard it as a tuneable parameter (from 10 to 100 km)
   real(r8) :: k_gw, l_gw
   !--lk-
   ! Diagnosed vertical displacements for waves.
@@ -485,13 +491,15 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   ubmc = 0._r8
   ubmc2 = 0._r8
   wrk = 0._r8
-  wvarx = 0._r8
-  !-- lk+
+
+  ! Initialize fields for orographic gravity wave subgrid vertical velocity
+  if (present(wvarx)) wvarx = 0._r8
   dispgw=0._r8
+
+  ! Compute parameters for orographic gravity wave subgrid vertical velocity
+  ! l_gw is wavelength, k_gw is angular wavenumber
   l_gw=10000.0_r8
   k_gw=2.0_r8*3.1415926_r8/l_gw
-  !-- lk-
-
 
   !------------------------------------------------------------------------
   ! Compute the stress profiles and diffusivities
@@ -623,50 +631,25 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   end if
 
   if ( present(wvarx) ) then
-     !AH if (present(kwvrdg)) then
-     !#####for ridge schemes
+     ! for oro scheme
+     wvarx = 0._r8
      do k = maxval(src_level)-1, ktop, -1
         do l = -ngwv, ngwv
-           ubmc(:,l) = ubi(:,k) - c(:,l)
-           dispgw(:,l,k) = 0._r8
-           where( ubmc(:,l) > 0._r8 .and. src_level > k)
-              dispgw(:,l,k) = tau(:,l,k) / max((ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw ), 1e-15)  ! Make sure we do not divide by zero
-              wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
-           end where
-           ! BRH: check this
-           where( src_level <= k .or. ubmc(:,l) <= 0._r8 )
-              wvarx(:,l,k) = 0._r8
-           endwhere
-        end do
-     end do
-  else
-     !###### for oro scheme
-     do k = maxval(src_level)-1, ktop, -1
-        do l = -ngwv, ngwv
-           ubmc(:,l) = ubi(:,k) - c(:,l)
-           where( ubmc(:,l) > 0. .and. src_level > k)
-              dispgw(:,l,k) =  tau(:,l,k) / (ubmc(:,l) * rhoi(:,k) * ni(:,k) * k_gw  * effgw )
-              wvarx(:,l,k) = dispgw(:,l,k) * ((ubmc(:,l)* k_gw )**2)
-           end where
-           where( src_level <= k )
-              wvarx(:,l,k) = 0.
-           endwhere
-        end do
-     end do
-
-     do i = 1, ncol
-        do l = -ngwv, ngwv
-           do k = maxval(src_level)-1, ktop, -1
-!             if (dispgw(i,l,k) .eq. 0._r8) then
-!                wvarx(i,l,k) = 0.
-!             end if
-              if (wvarx(i,0,k) > 50._r8) then
-                 write(iulog,*) 'AllenHu2 wvarx ',wvarx(i,l,k),' dispgw ',dispgw(i,l,k),' tau ',tau(i,l,k),' ubmc ',ubmc(i,l),' rhoi ',rhoi(i,k),' ni',ni(i,k),' i ',i,' k ',k
+           do i = 1,ncol
+              ubmc(i,l) = ubi(i,k) - c(i,l)
+              if (ubmc(i,l) > 0._r8 .and. src_level(i) > k .and. rhoi(i,k) > 0._r8 .and. ni(i,k) > 0._r8) then
+                 dispgw(i,l,k) = min(tau(i,l,k) / (ubmc(i,l) * rhoi(i,k) * ni(i,k) * k_gw), (ubmc(i,l) / ni(i,k)) ** 2.0_r8)
+                 ! This was an option in original CESM impl, but appeared to be inactive; should effgw be used?
+                 !dispgw(i,l,k) = min(tau(i,l,k) / (ubmc(i,l) * rhoi(i,k) * ni(i,k) * k_gw * effgw), (ubmc(i,l) / ni(i,k)) ** 2)
+                 wvarx(i,l,k) = dispgw(i,l,k) * ((ubmc(i,l) * k_gw) ** 2.0_r8)
+              else
+                 wvarx(i,l,k) = 0._r8
               end if
            end do
-        end do 
-     end do
+        end do
+     end do  
   end if
+
   !------------------------------------------------------------------------
   ! Compute the tendencies from the stress divergence.
   !------------------------------------------------------------------------

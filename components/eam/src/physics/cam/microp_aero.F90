@@ -95,7 +95,7 @@ integer :: cldo_idx = -1
 integer :: dgnumwet_idx = -1
 
 !-----------lk+  read wvar_gw
-integer :: wvar_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from orography gravity wave  gw_drag_cam54.F90
+integer :: wvar_gw_oro_idx = -1            ! index for vertical velocity variances (m+2 s-2)  from orography gravity wave  gw_drag_cam54.F90
 integer :: wvar_gw_convect_dp_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
 !integer :: wvar_gw_convect_sh_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
 integer :: wvar_gw_front_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
@@ -203,15 +203,14 @@ subroutine microp_aero_init
 !-----------lk+  read wvar_gw
 !  write(iulog,*) 'AllenHu microp 3'
    ! get indices for fields in the physics buffer
-  wvar_idx      = pbuf_get_index('wvar_gw')
-  if (wvar_idx < 0) then
-     call endrun('wvar_idx < 0')
+  wvar_gw_oro_idx      = pbuf_get_index('wvar_gw_oro')
+  if (wvar_gw_oro_idx < 0) then
+     call endrun('wvar_gw_oro_idx < 0')
   end if
   wvar_gw_convect_dp_idx      = pbuf_get_index('wvar_cvtdp')
 !  wvar_gw_convect_sh_idx      = pbuf_get_index('wvar_cvtsh')
   wvar_gw_front_idx      = pbuf_get_index('wvar_front')
 !  wvar_gw_front_igw_idx      = pbuf_get_index('wvar_frtigw')
-!  write(iulog,*) 'AllenHu microp ', wvar_idx,' ', wvar_gw_convect_dp_idx,' ', wvar_gw_convect_sh_idx,' ', wvar_gw_front_idx,' ', wvar_gw_front_igw_idx
 !-----------lk-
 
    select case(trim(eddy_scheme))
@@ -519,12 +518,12 @@ subroutine microp_aero_run ( &
    real(r8), allocatable :: factnum(:,:,:) ! activation fraction for aerosol number
    !-------------------------------------------------------------------------------
 !-----------lk+  read wvar_gw
-   real(r8), pointer :: wvar_buf(:,:)    ! buffer w'2 variance
+   real(r8), pointer :: wvar_gw_oro_buf(:,:)    ! buffer w'2 variance
    real(r8), pointer :: wvar_gw_convect_dp_buf(:,:)    ! buffer w'2 variance
 !   real(r8), pointer :: wvar_gw_convect_sh_buf(:,:)    ! buffer w'2 variance
    real(r8), pointer :: wvar_gw_front_buf(:,:)    ! buffer w'2 variance
 !   real(r8), pointer :: wvar_gw_front_igw_buf(:,:)    ! buffer w'2 variance
-   call pbuf_get_field(pbuf,wvar_idx,wvar_buf)
+   call pbuf_get_field(pbuf,wvar_gw_oro_idx,wvar_gw_oro_buf)
    call pbuf_get_field(pbuf,wvar_gw_convect_dp_idx,wvar_gw_convect_dp_buf)
 !   call pbuf_get_field(pbuf,wvar_gw_convect_sh_idx,wvar_gw_convect_sh_buf)
    call pbuf_get_field(pbuf,wvar_gw_front_idx,wvar_gw_front_buf)
@@ -673,11 +672,12 @@ subroutine microp_aero_run ( &
          select case (trim(eddy_scheme))
          case ('diag_TKE', 'CLUBB_SGS', 'SHOC_SGS')
             wsub(i,k) = sqrt(0.5_r8*(tke(i,k) + tke(i,k+1))*(2._r8/3._r8))
-            if (.not. is_first_step()) then
-              wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
-            end if
             wsub(i,k) = min(wsub(i,k),10._r8)
+            wsub(i,k) = max(wsubmin, wsub(i,k))  ! BRH: this change will be non-bfb probably
             wsig(i,k) = max(0.001_r8, wsub(i,k))
+            if (.not. is_first_step()) then
+              wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
+            end if
          case default 
             ! get sub-grid vertical velocity from diff coef.
             ! following morrison et al. 2005, JAS
@@ -694,7 +694,7 @@ subroutine microp_aero_run ( &
             wsubi(i,k) = min(wsubi(i,k), 10.0_r8)
             !-------------- lk+
             if (.not. is_first_step()) then
-              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
             end if
             !--------------- lk-
          else
@@ -704,7 +704,7 @@ subroutine microp_aero_run ( &
             endif
             !-------------- lk+
             if (.not. is_first_step()) then
-              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_buf(i,k)+wvar_buf(i,k+1))*0.5_r8)
+              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
             end if
             !--------------- lk-
          endif
@@ -713,6 +713,7 @@ subroutine microp_aero_run ( &
 
       end do
    end do
+   !print *, 'BRHDEBUG: wsub, wsub_gw, wvar_gw_oro_buf = ', maxval(wsub), maxval(wsub_gw), maxval(wvar_gw_oro_buf)
 
    !!.......................................................... 
    !! Initialization
@@ -761,14 +762,10 @@ subroutine microp_aero_run ( &
    call outfld('WLARGE', w0, pcols, lchnk)
    call outfld('WSUBI2', w2, pcols, lchnk)
 !------------  lk+
-   !wsubi_gw(:ncol,:top_lev-1) = 0.001_r8
-   !wvar_buf(:ncol,:top_lev) = 0.001_r8
-   !wsubi_gw(:,:)=0.0
-   !wvar_buf(:,:)=0.0
    call outfld('WSUBG', wsub_gw, pcols, lchnk)
    call outfld('WSUBIG', wsubi_gw, pcols, lchnk)
 !   call outfld('WSUING', wsubi_ngw, pcols, lchnk)
-   call outfld('WVARBF', wvar_buf, pcols, lchnk)
+   call outfld('WVARBF', wvar_gw_oro_buf, pcols, lchnk)
    call outfld('WVARDP', wvar_gw_convect_dp_buf, pcols, lchnk)
 !   call outfld('WVARSH', wvar_gw_convect_sh_buf, pcols, lchnk)
    call outfld('WVARFR', wvar_gw_front_buf, pcols, lchnk)
