@@ -502,8 +502,8 @@ subroutine microp_aero_run ( &
    real(r8) :: wsubi(pcols,pver)   ! diagnosed sub-grid vertical velocity ice (m/s)
 
 !---------------lk+
-   real(r8) :: wsubi_gw(pcols ,pver)   ! diagnosed sub-grid vertical velocity ice (m/s) add orographci graivity wave
-   real(r8) :: wsub_gw(pcols ,pver)   ! diagnosed sub-grid vertical velocity  (m/s) add orographci graivity wave
+   real(r8) :: wsubi_gw(pcols ,pver)  ! diagnosed sub-grid vertical velocity ice (m/s) with orographic graivity waves
+   real(r8) :: wsub_gw(pcols ,pver)   ! diagnosed sub-grid vertical velocity  (m/s) with orographic graivity waves
 !---------------lk-
 
    real(r8) :: wsubice(pcols,pver) ! final updraft velocity for ice nucleation (m/s)

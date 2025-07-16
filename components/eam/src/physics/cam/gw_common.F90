@@ -5,7 +5,7 @@ module gw_common
 ! parameterizations.
 !
 use gw_utils, only: r8
-use cam_logfile,   only: iulog
+
 implicit none
 private
 save
@@ -324,7 +324,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
      lat,           t,    ti,  pmid, pint, dpm,   rdpm, &
      piln, rhoi,    nm,   ni,  ubm,  ubi,  xv,    yv,   &
      effgw,      c, kvtt, q,   dse,  tau,  utgw,  vtgw, &
-     ttgw, qtgw, taucd,   egwdffi,   gwut, dttdf, dttke, wvarx) !AH
+     ttgw, qtgw, taucd,   egwdffi,   gwut, dttdf, dttke, wvarx)
 
   !-----------------------------------------------------------------------
   ! Solve for the drag profile from the multiple gravity wave drag
@@ -409,14 +409,11 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   real(r8), intent(out) :: dttke(ncol,pver)
 
   ! Diagnosed vertical velocity variance for gravity waves.
-  ! BRH NOTE: this is used throughout this routine as if it is NOT optional; need to fix
   real(r8), intent(inout), optional :: wvarx(ncol,-ngwv:ngwv,0:pver)
 
   !---------------------------Local storage-------------------------------
   ! Column, level, wavenumber, and constituent loop indices.
   integer :: i, k, l, m
-  !AH
-  integer :: o
   ! "Total" and saturation diffusivity.
   real(r8) :: d(ncol), dsat(ncol)
   ! Fraction of dsat to use.
@@ -451,9 +448,6 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   ! LU decomposition.
   type(lu_decomp) :: decomp
 
-
-!AH++jtb
-  !--lk+
   ! Level, wavenumber for gravity wave drag
   !   k_gw: wavenumber (units?)
   !   l_gw: wavelength (units?)
@@ -461,10 +455,9 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
   !   L is considerably shorter than the length scales of OGWs cited in previous descriptions of the McFarlane scheme in CAM6,
   !   however, in practice this is poorly constrained quantity and we regard it as a tuneable parameter (from 10 to 100 km)
   real(r8) :: k_gw, l_gw
-  !--lk-
+
   ! Diagnosed vertical displacements for waves.
   real(r8) :: dispgw(ncol,-ngwv:ngwv,0:pver)
-!AH--jtb
 
   !------------------------------------------------------------------------
 
@@ -498,6 +491,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
 
   ! Compute parameters for orographic gravity wave subgrid vertical velocity
   ! l_gw is wavelength, k_gw is angular wavenumber
+  ! TODO: l_gw should probably be a namelist parameter
   l_gw=100.0e3_r8
   k_gw=2.0_r8*3.1415926_r8/l_gw
 
@@ -647,7 +641,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
               end if
            end do
         end do
-     end do  
+     end do
   end if
 
   !------------------------------------------------------------------------

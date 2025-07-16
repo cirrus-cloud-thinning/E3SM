@@ -540,7 +540,7 @@ subroutine gw_init()
   call addfld ('TTGW',(/ 'lev' /), 'A','K/s', &
        'T tendency - gravity wave drag')
 
-  ! Add outputs for veritical velocity variance
+  ! Add outputs for vertical velocity variance
   call addfld('WVAR_GW_ORO'    , (/'ilev'/), 'A', '1', 'Vertical velocity variance due to orographic waves')
   call addfld('WVAR_GW_CONVECT', (/'ilev'/), 'A', '1', 'Vertical velocity variance due to convective waves')
   call addfld('WVAR_GW_FRONT'  , (/'ilev'/), 'A', '1', 'Vertical velocity variance due to frontal waves')
@@ -855,15 +855,14 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
              hdepth, maxq0, gw_convect_hcf, hdepth_scaling_factor)
 
         do_latitude_taper = .false.
-        !write(iulog,*) 'AllenHu pgwv ', pgwv
         ! Solve for the drag profile with Beres source spectrum.
         call gw_drag_prof(ncol, pgwv, src_level, tend_level, do_latitude_taper, dt, &
              state1%lat(:ncol), t,    ti, pmid, pint, dpm,   rdpm, &
              piln, rhoi,       nm,   ni, ubm,  ubi,  xv,    yv,   &
              effgw_beres, c,   kvtt, q,  dse,  tau,  utgw,  vtgw, &
-             ttgw, qtgw,  taucd,     egwdffi,  gwut, dttdf, dttke,wvarx=wvarx_gw_convect_dp) !AH
+             ttgw, qtgw,  taucd,     egwdffi,  gwut, dttdf, dttke, wvarx=wvarx_gw_convect_dp) !AH
 
-        !  add the diffusion coefficients
+        ! Add the diffusion coefficients
         do k = 0, pver
            egwdffi_tot(:,k) = egwdffi_tot(:,k) + egwdffi(:,k)
         end do
@@ -875,7 +874,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
            end do
         end do
 
-        ! add the momentum tendencies to the output tendency arrays
+        ! Add the momentum tendencies to the output tendency arrays
         do k = 1, pver
            ptend%u(:ncol,k) = utgw(:,k)
            ptend%v(:ncol,k) = vtgw(:,k)
@@ -933,7 +932,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
            egwdffi_tot(:,k) = egwdffi_tot(:,k) + egwdffi(:,k)
         end do
 
-        !Add the constituent tendencies
+        ! Add the constituent tendencies
         do m=1, pcnst
            do k = 1, pver
               ptend%q(:ncol,k,m) = ptend%q(:ncol,k,m) + qtgw(:,k,m)
@@ -941,7 +940,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
         end do
 
 
-        ! add the momentum tendencies to the output tendency arrays
+        ! Add the momentum tendencies to the output tendency arrays
         do k = 1, pver
            ptend%u(:ncol,k) = ptend%u(:ncol,k) + utgw(:,k)
            ptend%v(:ncol,k) = ptend%v(:ncol,k) + vtgw(:,k)
@@ -968,6 +967,7 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
   end if
 
   if (use_gw_oro) then
+
      !---------------------------------------------------------------------
      ! Orographic stationary gravity waves
      !---------------------------------------------------------------------
@@ -994,7 +994,8 @@ subroutine gw_tend(state, sgh, pbuf, dt, ptend, cam_in)
      ! Add the orographic tendencies to the spectrum tendencies
      ! Compute the temperature tendency from energy conservation
      ! (includes spectrum).
-     
+     ! BRH TODO: separate this out to clean it up and make more transparent;
+     ! Only temperature tendency should require special logic 
      if(.not. use_gw_energy_fix) then
         !original
         do k = 1, pver
