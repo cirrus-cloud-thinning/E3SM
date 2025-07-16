@@ -498,7 +498,7 @@ subroutine gw_drag_prof(ncol, ngwv, src_level, tend_level, do_taper, dt, &
 
   ! Compute parameters for orographic gravity wave subgrid vertical velocity
   ! l_gw is wavelength, k_gw is angular wavenumber
-  l_gw=10000.0_r8
+  l_gw=100.0e3_r8
   k_gw=2.0_r8*3.1415926_r8/l_gw
 
   !------------------------------------------------------------------------
