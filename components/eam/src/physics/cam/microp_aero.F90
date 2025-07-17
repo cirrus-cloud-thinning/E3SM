@@ -62,6 +62,7 @@ logical             :: micro_do_icesupersat
 
 !!   icenul_wsub_scheme = 1 : f(TKE) as default
 !!                        2 : Mean updraft calculated from Gausssian PDF, with stddev=f(TKE)
+!!                        3 : f(TKE) + subgrid vertical velocity variance from orographic waves
 integer             :: icenul_wsub_scheme = 1
  
 ! contact freezing due to dust
@@ -94,13 +95,10 @@ integer :: aist_idx = -1
 integer :: cldo_idx = -1
 integer :: dgnumwet_idx = -1
 
-!-----------lk+  read wvar_gw
+! pbuf indices for gravity wave vertical velocity variances
 integer :: wvar_gw_oro_idx = -1            ! index for vertical velocity variances (m+2 s-2)  from orography gravity wave  gw_drag_cam54.F90
 integer :: wvar_gw_convect_dp_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
-!integer :: wvar_gw_convect_sh_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
 integer :: wvar_gw_front_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
-!integer :: wvar_gw_front_igw_idx = -1     ! index for vertical velocity variances (m+2 s-2)  from non-orography gravity wave  gw_drag_cam54.F90
-!-----------lk-
 
 ! Bulk aerosols
 character(len=20), allocatable :: aername(:)
@@ -200,18 +198,11 @@ subroutine microp_aero_init
    call cnst_get_ind('NUMLIQ', numliq_idx)
    call cnst_get_ind('NUMICE', numice_idx)
 
-!-----------lk+  read wvar_gw
-!  write(iulog,*) 'AllenHu microp 3'
    ! get indices for fields in the physics buffer
-  wvar_gw_oro_idx      = pbuf_get_index('wvar_gw_oro')
-  if (wvar_gw_oro_idx < 0) then
-     call endrun('wvar_gw_oro_idx < 0')
-  end if
-  wvar_gw_convect_dp_idx      = pbuf_get_index('wvar_cvtdp')
-!  wvar_gw_convect_sh_idx      = pbuf_get_index('wvar_cvtsh')
-  wvar_gw_front_idx      = pbuf_get_index('wvar_front')
-!  wvar_gw_front_igw_idx      = pbuf_get_index('wvar_frtigw')
-!-----------lk-
+   wvar_gw_oro_idx = pbuf_get_index('wvar_gw_oro')
+   if (wvar_gw_oro_idx < 0) call endrun('wvar_gw_oro_idx < 0')
+   wvar_gw_convect_dp_idx = pbuf_get_index('wvar_cvtdp')
+   wvar_gw_front_idx = pbuf_get_index('wvar_front')
 
    select case(trim(eddy_scheme))
    case ('diag_TKE', 'SHOC_SGS')
@@ -517,18 +508,12 @@ subroutine microp_aero_run ( &
 
    real(r8), allocatable :: factnum(:,:,:) ! activation fraction for aerosol number
    !-------------------------------------------------------------------------------
-!-----------lk+  read wvar_gw
    real(r8), pointer :: wvar_gw_oro_buf(:,:)    ! buffer w'2 variance
    real(r8), pointer :: wvar_gw_convect_dp_buf(:,:)    ! buffer w'2 variance
-!   real(r8), pointer :: wvar_gw_convect_sh_buf(:,:)    ! buffer w'2 variance
    real(r8), pointer :: wvar_gw_front_buf(:,:)    ! buffer w'2 variance
-!   real(r8), pointer :: wvar_gw_front_igw_buf(:,:)    ! buffer w'2 variance
    call pbuf_get_field(pbuf,wvar_gw_oro_idx,wvar_gw_oro_buf)
    call pbuf_get_field(pbuf,wvar_gw_convect_dp_idx,wvar_gw_convect_dp_buf)
-!   call pbuf_get_field(pbuf,wvar_gw_convect_sh_idx,wvar_gw_convect_sh_buf)
    call pbuf_get_field(pbuf,wvar_gw_front_idx,wvar_gw_front_buf)
-!   call pbuf_get_field(pbuf,wvar_gw_front_igw_idx,wvar_gw_front_igw_buf)
-!-----------lk-
 
    associate( &
       lchnk => state%lchnk,             &
@@ -660,12 +645,8 @@ subroutine microp_aero_run ( &
    wsub(:ncol,:top_lev-1)  = wsubmin
    wsubi(:ncol,:top_lev-1) = 0.001_r8
    wsig(:ncol,:top_lev-1)  = 0.001_r8
-!--------lk+
    wsubi_gw = 0
-   !wsubi_gw(:ncol,:top_lev-1) = 0.001_r8
    wsub_gw = 0
-   !wsub_gw(:ncol,:top_lev-1) = 0.001_r8
-!--------lk- 
    do k = top_lev, pver
       do i = 1, ncol
 
@@ -675,8 +656,11 @@ subroutine microp_aero_run ( &
             wsub(i,k) = min(wsub(i,k),10._r8)
             wsub(i,k) = max(wsubmin, wsub(i,k))  ! BRH: this change will be non-bfb probably
             wsig(i,k) = max(0.001_r8, wsub(i,k))
+            ! Merge vertical velocity variance from orographic waves
             if (.not. is_first_step()) then
-              wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
+               ! BRH: note that wvar_gw_oro_buf will only be filled if using orographic gravity waves; this should have a
+               ! conditional probably
+               wsub_gw(i,k)=sqrt(wsub(i,k)*wsub(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
             end if
          case default 
             ! get sub-grid vertical velocity from diff coef.
@@ -689,31 +673,28 @@ subroutine microp_aero_run ( &
             wsub(i,k)  = dum
          end select
 
+         ! Vertical velocity variance might be treated differently for ice nucleation
          if (eddy_scheme == 'CLUBB_SGS') then
             wsubi(i,k) = max(0.001_r8, wsub(i,k))
             wsubi(i,k) = min(wsubi(i,k), 10.0_r8)
-            !-------------- lk+
-            if (.not. is_first_step()) then
-              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
-            end if
-            !--------------- lk-
          else
             wsubi(i,k) = max(0.001_r8, wsub(i,k))
             if (.not. use_preexisting_ice) then
                wsubi(i,k) = min(wsubi(i,k), 0.2_r8)
             endif
-            !-------------- lk+
-            if (.not. is_first_step()) then
-              wsubi_gw(i,k)=sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
-            end if
-            !--------------- lk-
-         endif
-!         write(iulog,*) 'AllenHu microp 8'
-         wsub(i,k)  = max(wsubmin, wsub(i,k))
+         end if
+         ! Merge vertical velocity variance from orographic waves
+         ! BRH TODO: wvar_gw_oro_buf is only populated when actually using the oro drag scheme, so this really should use a
+         ! conditional
+         if (.not. is_first_step()) then
+            wsubi_gw(i,k) = sqrt(wsubi(i,k)*wsubi(i,k)+(wvar_gw_oro_buf(i,k)+wvar_gw_oro_buf(i,k+1))*0.5_r8)
+         end if
+
+         ! Apply threshold to wsub
+         wsub(i,k) = max(wsubmin, wsub(i,k))
 
       end do
    end do
-   !print *, 'BRHDEBUG: wsub, wsub_gw, wvar_gw_oro_buf = ', maxval(wsub), maxval(wsub_gw), maxval(wvar_gw_oro_buf)
 
    !!.......................................................... 
    !! Initialization
@@ -736,15 +717,19 @@ subroutine microp_aero_run ( &
 
    call t_stopf('microp_aero_run_init')
 
-   !!.......................................................... 
+   !!..........................................................
+   !! icenul_wsub_scheme = 1 : f(TKE)
    !! icenul_wsub_scheme = 2 : Mean updraft calculated from Gausssian PDF, with
-   !stddev=f(TKE)    
-   !!.......................................................... 
+   !! stddev=f(TKE)
+   !! icenul_wsub_scheme = 3: f(TKE) with wvar due to orographic waves
+   !!
+   !! TODO: add options to merge in WVAR_GW_CONVECT and WVAR_GW_FRONT? Why are these
+   !! not included?
+   !!..........................................................
 
    call t_startf('subgrid_mean_updraft')
    call subgrid_mean_updraft(ncol, w0, wsig, w2)
    call t_stopf('subgrid_mean_updraft')
-
 
    select case (icenul_wsub_scheme)
 
@@ -752,27 +737,24 @@ subroutine microp_aero_run ( &
          wsubice(1:ncol,1:pver) = wsubi(1:ncol,1:pver)
    case(2)
          wsubice(1:ncol,1:pver) = w2(1:ncol,1:pver)
+   case(3)
+         wsubice(1:ncol,1:pver) = wsubi_gw(1:ncol,1:pver)
    case default
          call endrun('nucleate_ice_cam_calc : icenul_wsub_scheme not set')
    end select
-!   write(iulog,*) 'AllenHu microp 9'
-   call outfld('WSUB',   wsub, pcols, lchnk)
-   call outfld('WSUBI',  wsubice, pcols, lchnk)
-   call outfld('WSIG',   wsig, pcols, lchnk)
+
+   call outfld('WSUB'  , wsub, pcols, lchnk)
+   call outfld('WSUBI' , wsubice, pcols, lchnk)
+   call outfld('WSIG'  , wsig, pcols, lchnk)
    call outfld('WLARGE', w0, pcols, lchnk)
    call outfld('WSUBI2', w2, pcols, lchnk)
-!------------  lk+
-   call outfld('WSUBG', wsub_gw, pcols, lchnk)
+   call outfld('WSUBG' , wsub_gw, pcols, lchnk)
    call outfld('WSUBIG', wsubi_gw, pcols, lchnk)
-!   call outfld('WSUING', wsubi_ngw, pcols, lchnk)
+
+   ! BRH: we should output these where they are computed in gw_drag rather than here
    call outfld('WVARBF', wvar_gw_oro_buf, pcols, lchnk)
    call outfld('WVARDP', wvar_gw_convect_dp_buf, pcols, lchnk)
-!   call outfld('WVARSH', wvar_gw_convect_sh_buf, pcols, lchnk)
    call outfld('WVARFR', wvar_gw_front_buf, pcols, lchnk)
-!   call outfld('WVARFRI', wvar_gw_front_igw_buf, pcols, lchnk)
-!------------ lk-
-!   write(iulog,*) 'AllenHu microp 10'
-
 
    if (trim(eddy_scheme) == 'CLUBB_SGS') deallocate(tke)
 
@@ -780,9 +762,7 @@ subroutine microp_aero_run ( &
    !ICE Nucleation
 
    call t_startf('nucleate_ice_cam_calc')
-!----------- lk+
-   call nucleate_ice_cam_calc(state, wsubi_gw, pbuf)
-!----------- lk-
+   call nucleate_ice_cam_calc(state, wsubice, pbuf)
    call t_stopf('nucleate_ice_cam_calc')
 
    !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
