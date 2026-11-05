@@ -497,7 +497,15 @@ void MAMAci::initialize_impl(const RunType run_type) {
 
   mam4::AeroConfig aero_config;
   // configure the nucleation parameterization
-  mam4::NucleateIce::Config nucleate_ice_config;
+  // nucleate_ice_subgrid is the subgrid-scale factor on RH used by the LP05
+  // RHi thresholds. EAM uses 1.2 with P3+SHOC; the mam4xx default (120)
+  // effectively disables the RHi gates, so it is exposed here.
+  const Real nucleate_ice_subgrid =
+      m_params.get<double>("nucleate_ice_subgrid", 120.0);
+  const Real so4_sz_thresh_icenuc =
+      m_params.get<double>("so4_sz_thresh_icenuc", 8.0e-8);
+  mam4::NucleateIce::Config nucleate_ice_config(nucleate_ice_subgrid,
+                                                so4_sz_thresh_icenuc);
   nucleate_ice_.init(aero_config, nucleate_ice_config);
 
   // configure the heterogeneous freezing parameterization
