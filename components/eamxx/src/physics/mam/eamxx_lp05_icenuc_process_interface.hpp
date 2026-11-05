@@ -64,12 +64,20 @@ protected:
   Real m_wsubice_min;   // floor on nucleation updraft [m/s]
   Real m_wsubice_max;   // cap on nucleation updraft [m/s]
   Real m_dust_scale;    // multiplier on prescribed dust number
+  int  m_top_lev;       // levels above this use wsubice=0.001 (as mam4_aci)
+
+  // Work arrays for the nucleation updraft
+  view_2d m_dz;         // layer thickness [m]
+  view_2d m_w_sec_int;  // w variance at interfaces [m2/s2]
 
   // Seeding settings
   Real m_seed_num_per_liter;  // seed INP number concentration [#/L]
   Real m_seed_lat_min, m_seed_lat_max;  // [deg]
   Real m_seed_lon_min, m_seed_lon_max;  // [deg], 0-360
   Real m_seed_p_min,   m_seed_p_max;    // [Pa]
+
+  std::string m_aero_source;  // "file" or "mam4_aci"
+  std::string m_ni_name;      // output field name (default ni_activated)
 
   // Names of the prescribed fields in the input file(s)
   std::string m_so4_file_name;

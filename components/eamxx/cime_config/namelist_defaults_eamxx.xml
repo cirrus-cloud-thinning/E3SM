@@ -592,6 +592,8 @@ be lost if SCREAM_HACK_XML is not enabled.
          Not on by default: add lp05_icenuc before p3 in mac_aero_mic::atm_procs_list
          and set p3::use_aerosol_cirrus_ice_nucleation=true. -->
     <lp05_icenuc inherit="atm_proc_base">
+      <aerosol_source type="string" valid_values="file,mam4_aci" doc="Aerosol number for LP05: file (prescribed_aero_files) or mam4_aci (so4_num_icenuc and dst_num_icenuc from mam4_aci in the same step; for testing against mam4_aci)">file</aerosol_source>
+      <ni_activated_name type="string" doc="Name of the output ice nucleation number; P3 reads ni_activated. Use another name to run as a diagnostic next to mam4_aci.">ni_activated</ni_activated_name>
       <prescribed_aero_files type="array(string)" doc="Files with prescribed sulfate (Aitken, D > 0.1 um) and coarse-dust number mixing ratios [#/kg] plus surface pressure"></prescribed_aero_files>
       <prescribed_aero_remap_file type="string" doc="Map file from the prescribed aerosol grid to the model grid; none if the grids match">none</prescribed_aero_remap_file>
       <prescribed_aero_ps_var_name type="string" doc="Name of the surface pressure variable in the prescribed aerosol files">PS</prescribed_aero_ps_var_name>
@@ -601,6 +603,8 @@ be lost if SCREAM_HACK_XML is not enabled.
       <nucleate_ice_subgrid type="real" doc="Subgrid-scale factor on relative humidity in LP05 (EAM uses 1.2 with P3+SHOC)">1.2</nucleate_ice_subgrid>
       <wsubice_min type="real" doc="Minimum nucleation updraft [m/s]">0.2</wsubice_min>
       <wsubice_max type="real" doc="Maximum nucleation updraft [m/s]">10.0</wsubice_max>
+      <top_level type="integer" doc="Levels above this index use a nucleation updraft of 0.001 m/s (matches top_level_mam4xx in mam4_aci)">0</top_level>
+      <top_level type="integer" doc="Levels above this index use a nucleation updraft of 0.001 m/s (matches top_level_mam4xx in mam4_aci)" vgrid="L72">6</top_level>
       <dust_scale_factor type="real" doc="Multiplier on prescribed dust number (background dust sensitivity)">1.0</dust_scale_factor>
       <seed_inp_per_liter type="real" doc="Seed ice nucleating particles added to dust number inside the seeding box [#/L]; 0 disables seeding">0.0</seed_inp_per_liter>
       <seed_lat_min type="real" doc="Seeding box southern edge [deg]">-90.0</seed_lat_min>
