@@ -145,6 +145,12 @@ void MAMAci::create_requests() {
   // number of activated aerosol for ice nucleation[#/kg]
   add_field<Computed>("ni_activated", scalar3d_mid, n_unit, grid_name);
 
+  // Aerosol number seen by LP05 ice nucleation [#/kg dry air]: Aitken-mode
+  // sulfate larger than so4_sz_thresh_icenuc, and coarse-mode number weighted
+  // by the dust mass fraction. Written out to prescribe aerosol for lp05_icenuc.
+  add_field<Computed>("so4_num_icenuc", scalar3d_mid, n_unit, grid_name);
+  add_field<Computed>("dst_num_icenuc", scalar3d_mid, n_unit, grid_name);
+
   // ------------------------------------------------------------------------
   // Output from droplet activation process (dropmixnuc)
   // ------------------------------------------------------------------------
@@ -363,6 +369,8 @@ void MAMAci::initialize_impl(const RunType run_type) {
   // ------------------------------------------------------------------------
   // ice nucleation output
   naai_ = get_field_out("ni_activated").get_view<Real **>();
+  so4_num_icenuc_ = get_field_out("so4_num_icenuc").get_view<Real **>();
+  dst_num_icenuc_ = get_field_out("dst_num_icenuc").get_view<Real **>();
 
   // droplet activation output
   tendnd_ = get_field_out("nc_nuceat_tend").get_view<Real **>();
@@ -507,6 +515,7 @@ void MAMAci::initialize_impl(const RunType run_type) {
   mam4::NucleateIce::Config nucleate_ice_config(nucleate_ice_subgrid,
                                                 so4_sz_thresh_icenuc);
   nucleate_ice_.init(aero_config, nucleate_ice_config);
+  so4_sz_thresh_icenuc_ = so4_sz_thresh_icenuc;
 
   // configure the heterogeneous freezing parameterization
   mam4::Hetfrz::Config hetfrz_config;
@@ -578,6 +587,12 @@ void MAMAci::run_impl(const double dt) {
       nihf_, niim_, nidep_, nimey_, naai_hom_,
       // ## output to be used by the other processes ##
       naai_);
+
+  // Aerosol number used by LP05 (diagnostic, for prescribing lp05_icenuc)
+  compute_icenuc_aerosol_number(ncol_, nlev_, dry_aero_, aitken_dry_dia_,
+                                so4_sz_thresh_icenuc_,
+                                // output
+                                so4_num_icenuc_, dst_num_icenuc_);
 
   // Compute cloud fractions based on cloud threshold
   store_liquid_cloud_fraction(ncol_, dry_atm_, liqcldf_, liqcldf_prev_,

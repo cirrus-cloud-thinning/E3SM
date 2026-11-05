@@ -33,6 +33,7 @@ class MAMAci final : public MAMGenericInterface {
   using KT = ekat::KokkosTypes<DefaultDevice>;
 
   mam4::NucleateIce nucleate_ice_;
+  Real so4_sz_thresh_icenuc_;  // minimum sulfate diameter for LP05 [m]
   mam4::Hetfrz hetfrz_;
 
   // views for single-column data
@@ -78,6 +79,10 @@ class MAMAci final : public MAMGenericInterface {
 
   // ice nucleation output for FM
   view_2d naai_;
+
+  // aerosol number seen by LP05 ice nucleation [#/kg]
+  view_2d so4_num_icenuc_;
+  view_2d dst_num_icenuc_;
 
   // droplet activation inputs and outputs
   view_2d kvh_int_;  // Eddy diffusivity of heat at the interfaces

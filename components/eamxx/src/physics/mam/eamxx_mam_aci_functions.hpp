@@ -189,6 +189,48 @@ void compute_nucleate_ice_tendencies(
                                         surf, progs, diags, tends);
       });
 }
+// Sulfate and dust number that mam4::NucleateIce::compute_tendencies passes
+// to LP05, but as dry mixing ratios [#/kg] (no density factor):
+//   so4: Aitken-mode number larger than so4_sz_thresh (lognormal tail)
+//   dst: coarse-mode number times dust mass fraction of the coarse mode
+void compute_icenuc_aerosol_number(
+    const int ncol, const int nlev, const mam_coupling::AerosolState &dry_aero,
+    const MAMAci::view_2d aitken_dry_dia, const Real so4_sz_thresh,
+    // output
+    MAMAci::view_2d so4_num, MAMAci::view_2d dst_num) {
+  constexpr int aitken = static_cast<int>(mam4::ModeIndex::Aitken);
+  constexpr int coarse = static_cast<int>(mam4::ModeIndex::Coarse);
+  const int idst = mam4::aerosol_index_for_mode(mam4::ModeIndex::Coarse,
+                                                mam4::AeroId::DST);
+  const Real alnsg_aitken = mam4::log(mam4::modes(aitken).mean_std_dev);
+  Kokkos::parallel_for(
+      "MAMAci::run_impl::compute_icenuc_aerosol_number",
+      Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {ncol, nlev}),
+      KOKKOS_LAMBDA(const int icol, const int kk) {
+        const Real dgnum = aitken_dry_dia(icol, kk);
+        Real so4 = 0;
+        if(dgnum > 0) {
+          so4 = dry_aero.int_aero_nmr[aitken](icol, kk) *
+                (0.5 - 0.5 * erf(mam4::log(so4_sz_thresh / dgnum) /
+                                 (mam4::sqrt(2.0) * alnsg_aitken)));
+        }
+        so4_num(icol, kk) = mam4::max(Real(0), so4);
+
+        const Real dmc = dry_aero.int_aero_mmr[coarse][idst](icol, kk);
+        Real dst       = 0;
+        if(dmc > 0) {
+          Real total = 0;
+          for(int a = 0; a < mam_coupling::num_aero_species(); ++a) {
+            if(dry_aero.int_aero_mmr[coarse][a].data()) {
+              total += dry_aero.int_aero_mmr[coarse][a](icol, kk);
+            }
+          }
+          dst = dmc / total * dry_aero.int_aero_nmr[coarse](icol, kk);
+        }
+        dst_num(icol, kk) = dst;
+      });
+}
+
 void store_liquid_cloud_fraction(
     const int ncol,
     const mam_coupling::DryAtmosphere &dry_atmosphere,
