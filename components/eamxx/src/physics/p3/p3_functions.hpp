@@ -131,6 +131,9 @@ template <typename ScalarT, typename DeviceT> struct Functions {
     bool set_cld_frac_i_to_one                  = false;
     bool set_cld_frac_r_to_one                  = false;
     bool use_hetfrz_classnuc                    = false;
+    // Use ni_activated (from an aerosol-aware ice nucleation process such as
+    // lp05_icenuc) for T < -35 C even when CCN are prescribed.
+    bool use_aerosol_cirrus_ice_nucleation      = false;
     bool use_separate_ice_liq_frac              = false;
     bool extra_p3_diags                         = false;
 
@@ -172,6 +175,8 @@ template <typename ScalarT, typename DeviceT> struct Functions {
       set_cld_frac_i_to_one = params.get<bool>("set_cld_frac_i_to_one", set_cld_frac_i_to_one);
       set_cld_frac_r_to_one = params.get<bool>("set_cld_frac_r_to_one", set_cld_frac_r_to_one);
       use_hetfrz_classnuc   = params.get<bool>("use_hetfrz_classnuc", use_hetfrz_classnuc);
+      use_aerosol_cirrus_ice_nucleation = params.get<bool>(
+          "use_aerosol_cirrus_ice_nucleation", use_aerosol_cirrus_ice_nucleation);
       use_separate_ice_liq_frac =
           params.get<bool>("use_separate_ice_liq_frac", use_separate_ice_liq_frac);
       extra_p3_diags = params.get<bool>("extra_p3_diags", extra_p3_diags);

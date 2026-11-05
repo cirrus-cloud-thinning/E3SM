@@ -26,16 +26,31 @@ void Functions<S,D>
    const Scalar deposition_nucleation_exponent =
        runtime_options.deposition_nucleation_exponent;
 
+   // Below this temperature, an aerosol-aware ice nucleation process (e.g. LP05)
+   // can supply ni_activated for cirrus even when CCN are prescribed.
+   constexpr Scalar T_cirrus = C::Tmelt.value-sp(35.0);
+
    const auto t_lt_T_icenuc = temp < T_icenuc;
    const auto qv_supersat_i_ge_005 = qv_supersat_i >= 0.05;
 
+   // do_log: use the temperature-only deposition nucleation formula
+   // (Cooper-type) instead of the aerosol-derived ni_activated.
    const auto do_log = (!do_predict_nc || do_prescribed_CCN);
 
-   const auto any_if_log     = t_lt_T_icenuc && qv_supersat_i_ge_005 && (!do_log) && context;
-   const auto any_if_not_log = t_lt_T_icenuc && qv_supersat_i_ge_005 && do_log && context;
+   // With use_aerosol_cirrus_ice_nucleation, cirrus temperatures use ni_activated
+   // even when do_log is true; warmer temperatures keep the do_log behavior.
+   const Mask use_aero_here = runtime_options.use_aerosol_cirrus_ice_nucleation
+                              ? Mask(temp < T_cirrus) : Mask(false);
+
+   const auto base_mask      = t_lt_T_icenuc && qv_supersat_i_ge_005 && context;
+   const auto any_if_log     = base_mask && (Mask(!do_log) || use_aero_here);
+   const auto any_if_not_log = base_mask && Mask(do_log) && !use_aero_here;
 
    Pack dum{0.0}, N_nuc{0.0}, Q_nuc{0.0};
 
+   // NOTE: the two branches below act on disjoint lanes. With the runtime
+   // option off, at most one of them is active, which reproduces the original
+   // if/else structure bit-for-bit.
    if (any_if_not_log.any()) {
      dum = sp(0.005)*exp(sp(deposition_nucleation_exponent)*(tmelt-temp))*sp(1.0e3)*inv_rho;
 
@@ -53,7 +68,7 @@ void Functions<S,D>
        ni_nucleat_tend.set(any_if_not_log && n_nuc_ge_nsmall, N_nuc);
      }
    }
-   else {
+   if (any_if_log.any()) {
      ni_nucleat_tend.set(any_if_log, max(zero, (ni_activated-ni)*inv_dt));
      qv2qi_nucleat_tend.set(any_if_log, ni_nucleat_tend*mi0);
    }
