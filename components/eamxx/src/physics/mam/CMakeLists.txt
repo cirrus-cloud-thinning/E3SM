@@ -33,7 +33,8 @@ add_library(mam
   eamxx_mam_aci_process_interface.cpp
   eamxx_mam_wetscav_process_interface.cpp
   eamxx_mam_srf_and_online_emissions_process_interface.cpp
-  eamxx_mam_constituent_fluxes_interface.cpp)
+  eamxx_mam_constituent_fluxes_interface.cpp
+  eamxx_lp05_icenuc_process_interface.cpp)
 target_compile_definitions(mam PUBLIC EAMXX_HAS_MAM)
 target_link_libraries(mam PUBLIC eamxx_physics_share csm_share scream_share mam4xx)
 

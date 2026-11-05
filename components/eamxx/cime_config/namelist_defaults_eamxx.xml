@@ -215,6 +215,7 @@ be lost if SCREAM_HACK_XML is not enabled.
       <do_prescribed_ccn>true</do_prescribed_ccn>
       <use_hetfrz_classnuc type="logical" doc="Switch to turn on heterogeneous freezing due to prognostic aerosols">false</use_hetfrz_classnuc>
       <use_hetfrz_classnuc type="logical" doc="Switch to turn on heterogeneous freezing due to prognostic aerosols" COMPSET=".*SCREAM%MAM4xx.*">true</use_hetfrz_classnuc>
+      <use_aerosol_cirrus_ice_nucleation type="logical" doc="Use ni_activated from an aerosol-aware ice nucleation process (e.g. lp05_icenuc) for T below -35 C, even with prescribed CCN. Warmer temperatures keep the default deposition nucleation.">false</use_aerosol_cirrus_ice_nucleation>
       <do_prescribed_ccn COMPSET=".*SCREAM%MAM4xx.*">false</do_prescribed_ccn>
       <do_prescribed_ccn COMPSET=".*SCREAM.*noAero">false</do_prescribed_ccn>
       <do_predict_nc>true</do_predict_nc>
@@ -362,6 +363,8 @@ be lost if SCREAM_HACK_XML is not enabled.
     <!-- MAM4xx-ACI -->
     <mam4_aci inherit="mam4_atm_proc_base">
       <wsubmin type="real" doc="Minimum diagnostic sub-grid vertical velocity">0.001</wsubmin>
+      <nucleate_ice_subgrid type="real" doc="Subgrid-scale factor on relative humidity in LP05 ice nucleation (EAM uses 1.2 with P3+SHOC; 120 reproduces the original mam4xx default)">1.2</nucleate_ice_subgrid>
+      <so4_sz_thresh_icenuc type="real" doc="Minimum sulfate diameter (m) counted for homogeneous ice nucleation">8.0e-8</so4_sz_thresh_icenuc>
       <enable_aero_vertical_mix type="logical" doc="Enable vertical mixing of interstitial aerosols and liquid number during activation">true</enable_aero_vertical_mix>
       <top_level_mam4xx type="integer" doc="Level corresponding to the top of troposphere clouds" vgrid="L72" >6</top_level_mam4xx>
       <top_level_mam4xx type="integer" doc="level corresponding to the top of troposphere clouds" vgrid="L128">0</top_level_mam4xx>
@@ -584,6 +587,29 @@ be lost if SCREAM_HACK_XML is not enabled.
 
       <time_interpolation_method type="string" doc="Method for interpolating SPA data in time">yearly_periodic</time_interpolation_method>
     </spa>
+
+    <!-- LP05 cirrus ice nucleation with prescribed aerosol (cirrus seeding studies).
+         Not on by default: add lp05_icenuc before p3 in mac_aero_mic::atm_procs_list
+         and set p3::use_aerosol_cirrus_ice_nucleation=true. -->
+    <lp05_icenuc inherit="atm_proc_base">
+      <prescribed_aero_files type="array(string)" doc="Files with prescribed sulfate (Aitken, D > 0.1 um) and coarse-dust number mixing ratios [#/kg] plus surface pressure"></prescribed_aero_files>
+      <prescribed_aero_remap_file type="string" doc="Map file from the prescribed aerosol grid to the model grid; none if the grids match">none</prescribed_aero_remap_file>
+      <prescribed_aero_ps_var_name type="string" doc="Name of the surface pressure variable in the prescribed aerosol files">PS</prescribed_aero_ps_var_name>
+      <so4_num_var_name type="string" doc="Name of the sulfate number variable in the prescribed aerosol files">so4_num_icenuc</so4_num_var_name>
+      <dst_num_var_name type="string" doc="Name of the dust number variable in the prescribed aerosol files">dst_num_icenuc</dst_num_var_name>
+      <time_interpolation_method type="string" doc="Time interpolation of the prescribed aerosol: linear or yearly_periodic">linear</time_interpolation_method>
+      <nucleate_ice_subgrid type="real" doc="Subgrid-scale factor on relative humidity in LP05 (EAM uses 1.2 with P3+SHOC)">1.2</nucleate_ice_subgrid>
+      <wsubice_min type="real" doc="Minimum nucleation updraft [m/s]">0.2</wsubice_min>
+      <wsubice_max type="real" doc="Maximum nucleation updraft [m/s]">10.0</wsubice_max>
+      <dust_scale_factor type="real" doc="Multiplier on prescribed dust number (background dust sensitivity)">1.0</dust_scale_factor>
+      <seed_inp_per_liter type="real" doc="Seed ice nucleating particles added to dust number inside the seeding box [#/L]; 0 disables seeding">0.0</seed_inp_per_liter>
+      <seed_lat_min type="real" doc="Seeding box southern edge [deg]">-90.0</seed_lat_min>
+      <seed_lat_max type="real" doc="Seeding box northern edge [deg]">90.0</seed_lat_max>
+      <seed_lon_min type="real" doc="Seeding box western edge [deg, 0-360 or -180-180]; box may wrap through 0">0.0</seed_lon_min>
+      <seed_lon_max type="real" doc="Seeding box eastern edge [deg]">360.0</seed_lon_max>
+      <seed_p_min type="real" doc="Seeding box top pressure [Pa]">0.0</seed_p_min>
+      <seed_p_max type="real" doc="Seeding box bottom pressure [Pa]">110000.0</seed_p_max>
+    </lp05_icenuc>
 
     <!-- Simple Prescribed Chemistry (SPC) -->
     <spc inherit="atm_proc_base">

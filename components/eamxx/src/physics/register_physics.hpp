@@ -40,6 +40,7 @@
 #include "physics/mam/eamxx_mam_wetscav_process_interface.hpp"
 #include "physics/mam/eamxx_mam_srf_and_online_emissions_process_interface.hpp"
 #include "physics/mam/eamxx_mam_constituent_fluxes_interface.hpp"
+#include "physics/mam/eamxx_lp05_icenuc_process_interface.hpp"
 #endif
 #ifdef EAMXX_HAS_COSP
 #include "physics/cosp/eamxx_cosp.hpp"
@@ -99,6 +100,7 @@ inline void register_physics () {
   proc_factory.register_product("mam4_wetscav",&create_atmosphere_process<MAMWetscav>);
   proc_factory.register_product("mam4_srf_online_emiss",&create_atmosphere_process<MAMSrfOnlineEmiss>);
   proc_factory.register_product("mam4_constituent_fluxes",&create_atmosphere_process<MAMConstituentFluxes>);
+  proc_factory.register_product("lp05_icenuc",&create_atmosphere_process<LP05IceNuc>);
 #endif
 #ifdef EAMXX_HAS_COSP
   proc_factory.register_product("Cosp",&create_atmosphere_process<Cosp>);
