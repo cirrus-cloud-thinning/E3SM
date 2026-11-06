@@ -56,6 +56,7 @@ protected:
   int m_num_levs;
 
   std::shared_ptr<DataInterpolation> m_data_interpolation;
+  std::shared_ptr<DataInterpolation> m_seed_interpolation;
 
   mam4::NucleateIce m_nucleate_ice;
 
@@ -72,6 +73,7 @@ protected:
   int  m_pdf_num_bins;     // pdf_integral: number of updraft bins
   Real m_pdf_num_sigma;    // pdf_integral: bins span w0 +/- this many sigma
   bool m_het_fallback;     // dust freezing where LP05's hom branch gives no ice
+  bool m_preexisting_ice;  // EAM use_preexisting_ice (Shi et al. 2015)
 
   // Work arrays for the nucleation updraft
   view_2d m_dz;         // layer thickness [m]
@@ -82,6 +84,9 @@ protected:
   Real m_seed_lat_min, m_seed_lat_max;  // [deg]
   Real m_seed_lon_min, m_seed_lon_max;  // [deg], 0-360
   Real m_seed_p_min,   m_seed_p_max;    // [Pa]
+  Real m_seed_t_max;                    // [K], seeds only below this
+  bool m_seed_from_file;                // seed INP field from seed_inp_files
+  std::string m_seed_file_var;          // its variable name [#/kg]
 
   std::string m_aero_source;  // "file" or "mam4_aci"
   std::string m_ni_name;      // output field name (default ni_activated)

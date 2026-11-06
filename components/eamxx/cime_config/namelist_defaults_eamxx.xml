@@ -606,12 +606,17 @@ be lost if SCREAM_HACK_XML is not enabled.
       <sigma_w_extra type="real" doc="Extra subgrid w standard deviation added in quadrature to SHOC's, PDF methods only [m/s]">0.0</sigma_w_extra>
       <pdf_num_bins type="integer" doc="pdf_integral: number of updraft bins over w &gt; 0">40</pdf_num_bins>
       <het_fallback type="logical" doc="Use dust (immersion) freezing where LP05 selects homogeneous freezing but it gives no ice, and in the hom/het transition band when homogeneous freezing gives fewer crystals than dust (n1 = niimm instead of nihf). false reproduces mam4xx/EAM">false</het_fallback>
+      <use_preexisting_ice type="logical" doc="Pre-existing ice (Shi et al. 2015; EAM use_preexisting_ice): deposition on existing ice (qi, ni) lowers the nucleation updraft (Kärcher et al. 2006), homogeneous freezing is scaled by the fraction of cloud reaching its threshold (Kärcher and Burkhardt 2008), and existing ice is added to ni_activated when nucleation occurs. EAM also uses all Aitken sulfate (no D &gt; 0.1 um cut) with this option">false</use_preexisting_ice>
       <pdf_num_sigma type="real" doc="pdf_integral: bins span w0 +/- this many standard deviations">4.0</pdf_num_sigma>
       <wsubice_max type="real" doc="Maximum nucleation updraft [m/s]">10.0</wsubice_max>
       <top_level type="integer" doc="Levels above this index use a nucleation updraft of 0.001 m/s (matches top_level_mam4xx in mam4_aci)">0</top_level>
       <top_level type="integer" doc="Levels above this index use a nucleation updraft of 0.001 m/s (matches top_level_mam4xx in mam4_aci)" vgrid="L72">6</top_level>
       <dust_scale_factor type="real" doc="Multiplier on prescribed dust number (background dust sensitivity)">1.0</dust_scale_factor>
       <seed_inp_per_liter type="real" doc="Seed ice nucleating particles added to dust number inside the seeding box [#/L]; 0 disables seeding">0.0</seed_inp_per_liter>
+      <seed_inp_files type="array(string)" doc="Files with a 3D seed INP number mixing ratio [#/kg] (same layout as prescribed_aero_files: PS, hyam, hybm, time), used instead of seed_inp_per_liter; the seeding box and seed_t_max still apply"></seed_inp_files>
+      <seed_inp_var_name type="string" doc="Name of the seed INP variable in seed_inp_files">seed_inp_num</seed_inp_var_name>
+      <seed_inp_remap_file type="string" doc="Map file from the seed file grid to the model grid; none if the grids match">none</seed_inp_remap_file>
+      <seed_t_max type="real" doc="Seeds are added only where T is below this [K] (default -38 C)">235.15</seed_t_max>
       <seed_lat_min type="real" doc="Seeding box southern edge [deg]">-90.0</seed_lat_min>
       <seed_lat_max type="real" doc="Seeding box northern edge [deg]">90.0</seed_lat_max>
       <seed_lon_min type="real" doc="Seeding box western edge [deg, 0-360 or -180-180]; box may wrap through 0">0.0</seed_lon_min>
