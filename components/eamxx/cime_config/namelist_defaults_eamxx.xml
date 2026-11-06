@@ -601,7 +601,12 @@ be lost if SCREAM_HACK_XML is not enabled.
       <dst_num_var_name type="string" doc="Name of the dust number variable in the prescribed aerosol files">dst_num_icenuc</dst_num_var_name>
       <time_interpolation_method type="string" doc="Time interpolation of the prescribed aerosol: linear or yearly_periodic">linear</time_interpolation_method>
       <nucleate_ice_subgrid type="real" doc="Subgrid-scale factor on relative humidity in LP05 (EAM uses 1.2 with P3+SHOC)">1.2</nucleate_ice_subgrid>
-      <wsubice_min type="real" doc="Minimum nucleation updraft [m/s]">0.2</wsubice_min>
+      <wsubice_min type="real" doc="Minimum nucleation updraft, tke method only [m/s]">0.2</wsubice_min>
+      <updraft_method type="string" valid_values="tke,eam_gaussian,pdf_integral" doc="Nucleation updraft. tke: SHOC w variance clipped to [wsubice_min,wsubice_max], as mam4_aci. eam_gaussian: Gaussian PDF centred on resolved w (from omega) with std dev from SHOC and sigma_w_extra, LP05 called once with int_{w>0} w f(w) dw (EAM icenul_wsub_scheme=2). pdf_integral: same PDF, LP05 averaged over it, int_{w>0} n_i(w) f(w) dw">tke</updraft_method>
+      <sigma_w_extra type="real" doc="Extra subgrid w standard deviation added in quadrature to SHOC's, PDF methods only [m/s]">0.0</sigma_w_extra>
+      <pdf_num_bins type="integer" doc="pdf_integral: number of updraft bins over w &gt; 0">40</pdf_num_bins>
+      <het_fallback type="logical" doc="Use dust (immersion) freezing where LP05 selects homogeneous freezing but it gives no ice, and in the hom/het transition band when homogeneous freezing gives fewer crystals than dust (n1 = niimm instead of nihf). false reproduces mam4xx/EAM">false</het_fallback>
+      <pdf_num_sigma type="real" doc="pdf_integral: bins span w0 +/- this many standard deviations">4.0</pdf_num_sigma>
       <wsubice_max type="real" doc="Maximum nucleation updraft [m/s]">10.0</wsubice_max>
       <top_level type="integer" doc="Levels above this index use a nucleation updraft of 0.001 m/s (matches top_level_mam4xx in mam4_aci)">0</top_level>
       <top_level type="integer" doc="Levels above this index use a nucleation updraft of 0.001 m/s (matches top_level_mam4xx in mam4_aci)" vgrid="L72">6</top_level>

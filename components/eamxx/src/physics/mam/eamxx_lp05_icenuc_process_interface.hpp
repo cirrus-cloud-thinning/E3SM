@@ -66,6 +66,13 @@ protected:
   Real m_dust_scale;    // multiplier on prescribed dust number
   int  m_top_lev;       // levels above this use wsubice=0.001 (as mam4_aci)
 
+  // Nucleation updraft (see constructor)
+  int  m_updraft_method;   // 0: tke, 1: eam_gaussian, 2: pdf_integral
+  Real m_sigma_w_extra;    // extra subgrid w std dev added to SHOC's [m/s]
+  int  m_pdf_num_bins;     // pdf_integral: number of updraft bins
+  Real m_pdf_num_sigma;    // pdf_integral: bins span w0 +/- this many sigma
+  bool m_het_fallback;     // dust freezing where LP05's hom branch gives no ice
+
   // Work arrays for the nucleation updraft
   view_2d m_dz;         // layer thickness [m]
   view_2d m_w_sec_int;  // w variance at interfaces [m2/s2]
