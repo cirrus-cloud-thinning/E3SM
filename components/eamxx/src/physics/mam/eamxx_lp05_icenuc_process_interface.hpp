@@ -74,6 +74,7 @@ protected:
   Real m_pdf_num_sigma;    // pdf_integral: bins span w0 +/- this many sigma
   bool m_het_fallback;     // dust freezing where LP05's hom branch gives no ice
   bool m_preexisting_ice;  // EAM use_preexisting_ice (Shi et al. 2015)
+  Real m_fhom_override;    // >= 0: replaces fhom (test switch); < 0: computed
 
   // Work arrays for the nucleation updraft
   view_2d m_dz;         // layer thickness [m]

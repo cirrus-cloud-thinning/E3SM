@@ -102,6 +102,9 @@ Real frachom (const Real Tmean, const Real RHimean, const Real detaT)
 // freezing is scaled by fhom; existing ice is added to the result when
 // nucleation occurs, so that P3's (ni_activated - ni) gives the new ice.
 // so4_num should then be all Aitken sulfate (EAM drops the D > 0.1 um cut).
+// fhom comes from the same wbar (T fluctuation wbar/0.23 K, RHi_mean = 1) and
+// is zero below about 0.25 m/s, so with the 0.2 m/s tke floor it shuts off
+// homogeneous freezing. fhom_override >= 0 replaces it (a test switch).
 //
 // With both flags false this is mam4xx's nucleati. Outputs in #/kg; also
 // returns wpice [m/s] and fhom.
@@ -111,6 +114,7 @@ void lp05_nucleati (const Real wbar, const Real tair, const Real pmid,
                     const Real so4_num, const Real dst3_num, const Real subgrid,
                     const bool het_fallback, const bool preexisting_ice,
                     const Real qi, const Real ni_in, const Real mincld,
+                    const Real fhom_override,
                     Real& nuci, Real& onihf, Real& oniimm, Real& wpice, Real& fhom)
 {
   namespace ni = mam4::nucleate_ice;
@@ -133,7 +137,8 @@ void lp05_nucleati (const Real wbar, const Real tair, const Real pmid,
     wbar1 = mam4::max(wbar - wpice,    preice_minweff);
     wbar2 = mam4::max(wbar - wpicehet, preice_minweff);
     wpice = mam4::min(wpice, wbar);
-    fhom  = frachom(tair, Real(1), wbar/Real(0.23));
+    fhom  = fhom_override >= 0 ? fhom_override
+                               : frachom(tair, Real(1), wbar/Real(0.23));
   }
   const Real Npre_cm3 = Ni_preice*Real(1e-6);
 
@@ -258,6 +263,11 @@ LP05IceNuc::LP05IceNuc (const ekat::Comm& comm, const ekat::ParameterList& param
   // Pre-existing ice (Shi et al. 2015, EAM use_preexisting_ice); see
   // lp05_nucleati above. Needs qi and ni.
   m_preexisting_ice = m_params.get<bool>("use_preexisting_ice", false);
+  // Test switch: a value in [0, 1] replaces fhom (pre-existing ice only);
+  // negative (default) computes it as EAM does.
+  m_fhom_override = m_params.get<double>("preice_fhom_override", -1.0);
+  EKAT_REQUIRE_MSG(m_fhom_override<=1,
+      "ERROR: lp05_icenuc preice_fhom_override must be <= 1 (negative = off).");
   EKAT_REQUIRE_MSG(m_sigma_w_extra>=0,
       "ERROR: lp05_icenuc sigma_w_extra must be non-negative.");
   EKAT_REQUIRE_MSG(m_pdf_num_bins>=1 && m_pdf_num_sigma>0,
@@ -530,6 +540,7 @@ void LP05IceNuc::run_impl (const double /* dt */)
   const Real nsigma       = m_pdf_num_sigma;
   const bool het_fallback = m_het_fallback;
   const bool preice       = m_preexisting_ice;
+  const Real fhom_override = m_fhom_override;
   constexpr Real gravit   = physics::Constants<Real>::gravit.value;
   const int  top_lev      = m_top_lev;
   const Real seed_cm3     = m_seed_num_per_liter*1e-3; // #/L -> #/cm3
@@ -646,7 +657,7 @@ void LP05IceNuc::run_impl (const double /* dt */)
           if (het_fallback || preice) {
             lp05_nucleati(w, temp, pmid, relhum, icldm, rho, so4_cm3, dst_cm3,
                           subgrid, het_fallback, preice, qi_k, ni_k, mincld,
-                          n, nhf, nimm, wpi, fh);
+                          fhom_override, n, nhf, nimm, wpi, fh);
           } else {
             Real ndep = 0, nmey = 0;
             nucleate_ice.nucleati(w, temp, pmid, relhum, icldm, rho,
